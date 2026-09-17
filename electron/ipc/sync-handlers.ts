@@ -22,6 +22,7 @@ import { MexcAdapter } from '../exchanges/mexc/index'
 import { BitunixAdapter } from '../exchanges/bitunix/index'
 import { syncAll } from '../sync/engine'
 import type { ExchangeAdapter, SupportedExchange } from '../exchanges/types'
+import { logger } from '../utils/logger'
 
 /**
  * Handler IPC untuk kredensial dan sync (Fase 2).
@@ -215,7 +216,7 @@ export function registerSyncHandlers(getWindow: () => BrowserWindow | null): voi
             return { ok: true, data: payload }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            console.error('[ipc:sync] sync gagal:', message)
+            logger.error('[ipc:sync] sync gagal:', error)
             return { ok: false, error: message }
         }
     })

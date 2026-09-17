@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { closeDb, getDbPath, initializeDb } from './db/index'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerSyncHandlers } from './ipc/sync-handlers'
+import { logger } from './utils/logger'
 
 /**
  * Entry point main process.
@@ -12,6 +13,8 @@ import { registerSyncHandlers } from './ipc/sync-handlers'
  */
 
 const APP_NAME = 'Aplikasi Trading Journal Otomatis'
+logger.initGlobalErrorHandlers()
+logger.info(`Memulai ${APP_NAME}... File Log: ${logger.getLogPath()}`)
 
 /**
  * WAJIB dipanggil SEBELUM app.whenReady().
@@ -85,13 +88,13 @@ if (!gotLock) {
         // error muncul SEKARANG — saat startup — bukan nanti saat user menyimpan trade.
         try {
             const result = initializeDb()
-            console.log('[db] koneksi terbuka:', getDbPath())
+            logger.info(`[db] koneksi terbuka: ${getDbPath()}`)
             if (result.applied.length > 0) {
-                console.log(`[db] migrasi diterapkan: ${result.applied.join(', ')}`)
+                logger.info(`[db] migrasi diterapkan: ${result.applied.join(', ')}`)
             }
-            console.log(`[db] schema version: ${result.currentVersion}`)
+            logger.info(`[db] schema version: ${result.currentVersion}`)
         } catch (error) {
-            console.error('[db] GAGAL menginisialisasi database:', error)
+            logger.error('[db] GAGAL menginisialisasi database:', error)
             throw error
         }
 

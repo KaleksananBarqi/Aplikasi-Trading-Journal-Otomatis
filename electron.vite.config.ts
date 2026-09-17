@@ -26,7 +26,8 @@ export default defineConfig({
                     'fase1-verify': resolve(__dirname, 'electron/tests/fase1-verify.ts'),
                     'fase2-verify': resolve(__dirname, 'electron/tests/fase2-verify.ts'),
                     'fase3-verify': resolve(__dirname, 'electron/tests/fase3-verify.ts'),
-                    'metrics-verify': resolve(__dirname, 'electron/tests/metrics-verify.ts')
+                    'metrics-verify': resolve(__dirname, 'electron/tests/metrics-verify.ts'),
+                    'test-real-sync': resolve(__dirname, 'electron/tests/test-real-sync.ts')
                 }
             },
             rollupOptions: {

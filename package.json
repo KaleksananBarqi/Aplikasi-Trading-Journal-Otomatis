@@ -21,7 +21,8 @@
         "dist:dir": "npm run build && electron-builder --win --dir",
         "verify:packaged": "node scripts/run-packaged-verify.cjs",
         "verify:acceptance": "node scripts/run-electron.cjs scripts/verify-acceptance.cjs",
-        "release": "git add -A && git commit -m \"chore: pre-release commit\" --allow-empty && npm version patch -m \"Bump version to %s\" && git push && git push --tags && npm run dist"
+        "release": "git add -A && git commit -m \"chore: pre-release commit\" --allow-empty && npm version patch -m \"Bump version to %s\" && git push && git push --tags && npm run dist",
+        "test:real-sync": "npm run build && node scripts/run-electron.cjs out/main/test-real-sync.js"
     },
     "dependencies": {
         "better-sqlite3": "^13.0.3",
