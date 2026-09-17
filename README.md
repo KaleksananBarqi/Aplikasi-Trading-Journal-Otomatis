@@ -196,4 +196,6 @@ scripts/             verifikasi & launcher
 
 ## Lisensi
 
-UNLICENSED — proyek personal.
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+MIT License

@@ -1,0 +1,74 @@
+name: Build & Release
+
+# Trigger when a version tag (v*) is pushed
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # On Windows we need Wine for building the Windows installer if not using native runner
+      - name: Install Wine (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y wine
+
+      - name: Build application
+        run: npx electron-builder --publish=never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-artifact
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create a GitHub Release
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Combine all files from each OS into a single release
+          assets=""
+          for file in $(find ./artifacts -type f); do
+            assets+=" $file"
+          done
+          gh release create ${{ github.ref_name }} $assets \
+            --repo ${{ github.repository }} \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Auto‑generated release for ${{ github.ref_name }}.\n\n"$(git log -1 --pretty=%B)""
