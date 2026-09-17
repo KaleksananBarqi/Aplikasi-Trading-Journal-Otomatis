@@ -4,7 +4,7 @@
     "private": true,
     "description": "Trading journal otomatis read-only untuk MEXC & Bitunix Futures (desktop lokal, single user)",
     "author": "",
-    "license": "UNLICENSED",
+    "license": "MIT",
     "main": "out/main/index.js",
     "scripts": {
         "dev": "electron-vite dev",
