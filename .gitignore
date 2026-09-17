@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Output build
+out/
+dist/
+release/
+
+# Data lokal aplikasi — DB SQLite & screenshot TIDAK boleh masuk repo
+data/
+screenshots/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Kredensial & konfigurasi lokal
+.env
+.env.*
+
+# PENTING (gotcha dari vault — ADR .env Credential Loading for smc-prompt-cli):
+# negasi di bawah HARUS ditulis SETELAH glob ".env.*" di atas, kalau tidak
+# glob itu yang menang dan template jadi ikut ter-ignore.
+# Verifikasi dengan: git check-ignore -v .env.example
+!.env.example
+
+# Log
+*.log
+npm-debug.log*
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

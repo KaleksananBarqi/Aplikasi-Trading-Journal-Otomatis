@@ -1,0 +1,109 @@
+# Konfigurasi packaging installer (brief §9).
+#
+# Target: installer yang bisa diklik user TANPA command line, tanpa Docker,
+# tanpa database server eksternal, tanpa proses background yang perlu disetel.
+#
+# Jalankan: npm run dist
+
+appId: com.tradingjournal.otomatis
+productName: Aplikasi Trading Journal Otomatis
+copyright: Copyright © 2026
+
+directories:
+  output: release
+  buildResources: build
+
+# Hanya file hasil build yang dimasukkan. Sumber tidak ikut ke installer.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/*.ts'
+  - '!node_modules/**/{test,__tests__,tests,spec,example,examples,docs,doc}/**'
+  - '!node_modules/**/*.{md,markdown,ts,map}'
+
+# ===========================================================================
+# npmRebuild: false — WAJIB, JANGAN DIUBAH TANPA MEMBACA INI
+# ===========================================================================
+#
+# Secara default, electron-builder menjalankan `@electron/rebuild` untuk semua
+# native module. Itu MEMBUAT PACKAGING GAGAL TOTAL di mesin tanpa Visual Studio:
+#
+#     ⨯ Error: Could not find any Visual Studio installation to use
+#     ⨯ node-gyp failed to rebuild 'node_modules/better-sqlite3'
+#
+# Padahal rebuild itu TIDAK DIPERLUKAN. Fase 0 sudah membuktikan secara empiris
+# (`npm run smoke`) bahwa `better-sqlite3@13.0.3` mengirim prebuilt **N-API**
+# binary yang ABI-stabil dan dimuat mulus oleh Electron 44 tanpa compile ulang.
+#
+# Jadi `npmRebuild: false` bukan sekadar menghindari error — ia mempertahankan
+# koreksi keputusan D1 (plans/01-ARCHITECTURE.md §Koreksi D1) dan menghilangkan
+# prasyarat Visual Studio (~6 GB) dari proyek ini sepenuhnya.
+#
+# Risiko yang disadari: kalau suatu saat lebih-sqlite3 berhenti mengirim prebuilt,
+# packaging akan menghasilkan installer yang crash saat dibuka. Cara memeriksa:
+# lihat `gypfile` dan isi folder `prebuilds/` di package.json lebih-sqlite3.
+npmRebuild: false
+
+# ===========================================================================
+# ASAR & NATIVE MODULE
+# ===========================================================================
+#
+# `better-sqlite3` adalah native addon. Binary `.node`-nya TIDAK bisa dimuat dari
+# dalam arsip asar (dlopen butuh file nyata di filesystem). Karena itu:
+#
+#   1. `asarUnpack` mengeluarkan binary native dari asar.
+#   2. `better-sqlite3` terdaftar di `dependencies` (bukan devDependencies),
+#      sehingga electron-builder ikut membundelnya beserta `prebuilds/`.
+#
+# Tanpa ini, installer akan berhasil dibuat TAPI aplikasi crash saat dibuka
+# dengan error "Cannot find module better-sqlite3". Ini jenis kegagalan yang
+# hanya muncul setelah install di mesin bersih.
+asar: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+  # ccxt memuat file JSON besar saat runtime; membiarkannya di dalam asar
+  # aman, tapi di-unpack untuk mengurangi waktu baca pertama.
+  - '**/node_modules/ccxt/**'
+
+# Kredensial TIDAK PERNAH dimasukkan ke installer. Disimpan lewat safeStorage
+# di direktori userData user saat runtime (keputusan D2).
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Tanpa code signing, Windows SmartScreen akan menampilkan peringatan saat
+  # installer dibuka. Itu diharapkan untuk build personal tanpa sertifikat.
+  signAndEditExecutable: false
+
+nsis:
+  # `oneClick: false` memunculkan wizard instalasi, sehingga user bisa memilih
+  # lokasi install. Untuk aplikasi personal, wizard lebih jelas daripada
+  # installer satu-klik yang langsung memasang tanpa konfirmasi.
+  oneClick: false
+  # Izinkan user mengganti folder instalasi.
+  allowToChangeInstallationDirectory: true
+  # Minta izin sebelum membuat shortcut. Membuat shortcut tanpa bertanya
+  # terasa seperti pemasangan paksa.
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Trading Journal
+  # Nama file installer yang jelas, tanpa karakter aneh yang menyulitkan
+  # saat diunduh atau dikirim.
+  artifactName: TradingJournal-Setup-${version}.${ext}
+  # Uninstaller menghapus folder aplikasi. DATA USER TIDAK DIHAPUS — DB ada di
+  # %APPDATA% dan berisi jurnal manual yang tidak bisa dihasilkan ulang.
+  deleteAppDataOnUninstall: false
+
+linux:
+  target:
+    - AppImage
+  category: Finance
+  synopsis: Trading journal read-only untuk MEXC & Bitunix Futures
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.finance

@@ -1,0 +1,46 @@
+# Normalisasi line ending.
+#
+# Kenapa ini penting: proyek ini menargetkan build lintas platform
+# (.exe / .dmg / .AppImage, brief §9). Tanpa aturan ini, Git di Windows
+# mengubah LF menjadi CRLF saat checkout, sehingga file yang tidak diubah
+# isinya tetap muncul sebagai "modified" — diff palsu yang menutupi
+# perubahan sebenarnya.
+
+# Default: normalisasi ke LF di repo.
+* text=auto eol=lf
+
+# File yang HARUS LF apa pun platformnya, karena diproses tooling
+# yang sensitif terhadap line ending.
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.cjs   text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sql   text eol=lf
+*.md    text eol=lf
+
+# File yang HARUS CRLF — hanya skrip Windows.
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binary: jangan diubah sama sekali.
+*.node  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.exe   binary
+*.dmg   binary
+*.appimage binary
+*.sqlite binary
+
+# Jangan tampilkan file ini di review/diff — bukan kode.
+package-lock.json  linguist-generated=true

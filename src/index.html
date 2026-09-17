@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="id" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+      CSP ketat: hanya konten lokal. App ini tidak boleh menghubungi server mana pun
+      selain domain resmi exchange, dan itu dilakukan dari main process, bukan renderer.
+      Lihat brief §8 (tidak ada telemetry / analytics pihak ketiga).
+    -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; connect-src 'none'" />
+  <title>Aplikasi Trading Journal Otomatis</title>
+  <script>
+    /*
+     * Terapkan tema SEBELUM React render.
+     *
+     * Tanpa ini, app akan menampilkan kedipan putih (flash of wrong theme)
+     * sebelum useTheme sempat berjalan. Karena dark mode adalah default
+     * (brief §7), kedipan putih di aplikasi trading terasa sangat mengganggu.
+     *
+     * `class="dark"` juga sudah diset langsung di <html> sebagai lapisan pertama;
+     * skrip ini menyesuaikannya bila user memilih tema lain.
+     */
+    ; (function () {
+      try {
+        var theme = window.localStorage.getItem('trading-journal-theme') || 'dark'
+        var isDark =
+          theme === 'dark' ||
+          (theme === 'system' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', isDark)
+
+        if (window.localStorage.getItem('trading-journal-colorblind') === 'true') {
+          document.documentElement.classList.add('colorblind-safe')
+        }
+      } catch (error) {
+        /* localStorage tidak tersedia: tetap tampilkan dark mode default. */
+      }
+    })()
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="./main.tsx"></script>
+</body>
+
+</html>
