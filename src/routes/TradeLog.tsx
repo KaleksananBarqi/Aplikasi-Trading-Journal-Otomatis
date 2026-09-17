@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { TradeDetail } from '@shared/domain'
 import { Badge, Button, EmptyState, ErrorNote } from '../components/ui'
 import { PageHeader } from '../components/AppShell'
+import { PnlValue } from '../components/PnlValue'
 import {
     formatDateTime,
     formatDuration,
@@ -88,6 +89,7 @@ interface TradeLogProps {
     onEdit: (detail: TradeDetail) => void
     onDelete: (detail: TradeDetail) => void
     onCreate: () => void
+    hidePnl: boolean
 }
 
 export function TradeLog({
@@ -96,7 +98,8 @@ export function TradeLog({
     error,
     onEdit,
     onDelete,
-    onCreate
+    onCreate,
+    hidePnl
 }: TradeLogProps): React.JSX.Element {
     const [sortKey, setSortKey] = useState<SortKey>('exitTime')
     const [sortDir, setSortDir] = useState<SortDirection>('desc')
@@ -241,14 +244,22 @@ export function TradeLog({
                                                     : undefined
                                             }
                                         >
-                                            {formatR(rMultiple)}
+                                            <PnlValue
+                                                value={formatR(rMultiple)}
+                                                hide={hidePnl}
+                                                className={rColorClass(rMultiple)}
+                                            />
                                         </td>
                                         <td
                                             className={tableCellClass(
                                                 cn('tabular text-right font-medium', pnlColorClass(trade.realizedPnl))
                                             )}
                                         >
-                                            {formatPnl(trade.realizedPnl)}
+                                            <PnlValue
+                                                value={formatPnl(trade.realizedPnl)}
+                                                hide={hidePnl}
+                                                className={pnlColorClass(trade.realizedPnl)}
+                                            />
                                         </td>
                                         <td className={tableCellClass('text-right')}>
                                             <div className="flex justify-end gap-1">
@@ -280,7 +291,7 @@ export function TradeLog({
                                     pnlColorClass(sorted.reduce((sum, d) => sum + d.trade.realizedPnl, 0))
                                 )}
                             >
-                                {formatPnl(sorted.reduce((sum, d) => sum + d.trade.realizedPnl, 0))}
+                                <PnlValue value={formatPnl(sorted.reduce((sum, d) => sum + d.trade.realizedPnl, 0))} hide={hidePnl} className={pnlColorClass(sorted.reduce((sum, d) => sum + d.trade.realizedPnl, 0))} />
                             </span>
                         </span>
                         <span>
@@ -291,6 +302,15 @@ export function TradeLog({
                                     2
                                 )}
                             </span>
+                        </span>
+                        <span>
+                            Trade dengan R valid:{' '}
+                            <span className="tabular">
+                                {sorted.filter((d) => d.rMultiple !== null).length} / {sorted.length}
+                            </span>
+                        </span>
+                        <span className="text-muted-foreground/70">
+                            Harga entry terakhir: {sorted[0] ? formatPrice(sorted[0].trade.entryPrice) : '—'}
                         </span>
                         <span>
                             Trade dengan R valid:{' '}

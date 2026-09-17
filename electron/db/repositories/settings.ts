@@ -69,7 +69,9 @@ export const SETTING_KEYS = {
     autoSyncEnabled: 'auto_sync_enabled',
     autoSyncIntervalMin: 'auto_sync_interval_min',
     /** Template checklist default untuk trade baru. */
-    checklistTemplate: 'checklist_template'
+    checklistTemplate: 'checklist_template',
+    /** Sembunyikan semua angka PnL (default false). */
+    hidePnl: 'hide_pnl'
 } as const
 
 export interface SessionBounds {

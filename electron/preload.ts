@@ -4,6 +4,7 @@ import {
     type AppHealth,
     type CredentialSavePayload,
     type CredentialStatusPayload,
+    type LogEntry,
     type MutationResult,
     type PreloadApi,
     type SettingsPayload,
@@ -100,7 +101,20 @@ const api: PreloadApi = {
         return () => {
             ipcRenderer.removeListener(IPC_CHANNELS.syncProgress, listener)
         }
-    }
+    },
+
+    // --- Logs / Debugging ---
+    getLogs: (limit?: number): Promise<MutationResult<LogEntry[]>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.logsGet, limit),
+
+    clearLogs: (): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.logsClear),
+
+    openLogFolder: (): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.logsOpenFolder),
+
+    logError: (message: string, details?: unknown): Promise<void> =>
+        ipcRenderer.invoke(IPC_CHANNELS.logWrite, { message, details })
 }
 
 contextBridge.exposeInMainWorld('api', api)

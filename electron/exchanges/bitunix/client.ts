@@ -211,12 +211,23 @@ export class BitunixClient {
         const timeoutSignal = AbortSignal.timeout(this.timeoutMs)
         const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
 
+        const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy
+        let dispatcher: unknown = undefined
+        if (proxyUrl) {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const { ProxyAgent } = require('undici') as { ProxyAgent: new (url: string) => unknown }
+                dispatcher = new ProxyAgent(proxyUrl)
+            } catch { }
+        }
+
         let response: Response
         try {
             response = await fetch(url, {
                 method: 'GET',
                 headers: { ...COMMON_HEADERS, ...authHeaders },
-                signal: combinedSignal
+                signal: combinedSignal,
+                ...(dispatcher ? ({ dispatcher } as Record<string, unknown>) : {})
             })
         } catch (error) {
             // Kegagalan jaringan dilempar apa adanya supaya `classifyError` di

@@ -159,8 +159,7 @@ export function mapClosedPosition(raw: Record<string, unknown>): RawClosedPositi
         // tidak pernah dilaporkan exchange.
         feeOpen: 0,
         feeClose: toNumber(pick(raw, ['fee', 'totalFee', 'closeFee', 'commission'])),
-        // Funding diambil dari endpoint terpisah dan diakumulasi di sync engine.
-        fundingFee: 0,
+        fundingFee: toNumber(pick(raw, ['funding', 'fundingFee', 'totalFunding'])),
         raw
     }
 }

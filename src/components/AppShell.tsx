@@ -11,7 +11,7 @@ import { cn } from '../lib/utils'
  * terlihat seperti template admin-dashboard generik (brief §7).
  */
 
-export type RouteId = 'dashboard' | 'trades' | 'journal' | 'analytics' | 'settings'
+export type RouteId = 'dashboard' | 'trades' | 'journal' | 'analytics' | 'settings' | 'logs'
 
 export interface NavItem {
     id: RouteId
@@ -24,7 +24,8 @@ const NAV_ITEMS: NavItem[] = [
     { id: 'trades', label: 'Trade Log', hint: 'Daftar transaksi' },
     { id: 'journal', label: 'Journal Entry', hint: 'Catatan & grading' },
     { id: 'analytics', label: 'Analytics', hint: 'Breakdown mendalam' },
-    { id: 'settings', label: 'Settings', hint: 'Preferensi & koneksi' }
+    { id: 'settings', label: 'Settings', hint: 'Preferensi & koneksi' },
+    { id: 'logs', label: 'Error Logs', hint: 'Log sistem & debugging' }
 ]
 
 interface AppShellProps {

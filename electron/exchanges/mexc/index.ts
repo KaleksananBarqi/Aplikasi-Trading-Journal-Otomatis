@@ -244,11 +244,14 @@ function createClient(credentials: ExchangeCredentials): unknown {
         )
     }
 
+    const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy
+
     return new MexcClass({
         apiKey: credentials.apiKey,
         secret: credentials.apiSecret,
         // WAJIB: tanpa ini ccxt mengarah ke spot, bukan futures.
         defaultType: 'swap',
+        ...(proxy ? { proxy, httpsProxy: proxy, httpProxy: proxy } : {}),
         // Wajib untuk futures MEXC — menentukan sub-tipe kontrak.
         options: {
             defaultType: 'swap',

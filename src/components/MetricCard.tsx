@@ -10,8 +10,12 @@ import { cn } from '../lib/utils'
 
 interface MetricCardProps {
     label: string
-    /** Nilai utama. Sengaja string, karena bisa berupa "∞" atau "—". */
-    value: string
+    /**
+     * Nilai utama. Bisa berupa string (mis. "∞" atau "—") atau elemen
+     * (mis. <PnlValue> untuk menyamarkan angka PnL). Dipakai sebagai ReactNode
+     * supaya penyamaran bisa dilakukan di dalam kartu.
+     */
+    value: ReactNode
     /** Keterangan di bawah nilai. */
     hint?: string
     /** Kelas warna untuk nilai. Default: warna teks biasa. */

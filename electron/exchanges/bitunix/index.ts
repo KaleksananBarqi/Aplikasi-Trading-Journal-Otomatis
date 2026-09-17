@@ -225,8 +225,9 @@ function logRetry(attempt: number, delay: number, error: Error): void {
 function extractList(data: unknown): Record<string, unknown>[] {
     if (Array.isArray(data)) return data as Record<string, unknown>[]
     if (data && typeof data === 'object') {
-        const list = (data as BitunixPagedData<Record<string, unknown>>).list
-        if (Array.isArray(list)) return list
+        const obj = data as Record<string, unknown>
+        const list = obj.positionList ?? obj.orderList ?? obj.list ?? obj.data
+        if (Array.isArray(list)) return list as Record<string, unknown>[]
     }
     return []
 }

@@ -3,6 +3,7 @@ import type { TradeDetail } from '@shared/domain'
 import { PageHeader } from '../components/AppShell'
 import { MetricCard } from '../components/MetricCard'
 import { CalendarHeatmap } from '../components/charts/CalendarHeatmap'
+import { PnlValue } from '../components/PnlValue'
 import { EquityChart } from '../components/charts/EquityChart'
 import { GradeScatter } from '../components/charts/GradeScatter'
 import { RHistogram } from '../components/charts/RHistogram'
@@ -46,9 +47,10 @@ const EMPTY_FILTERS: Filters = { from: '', to: '', symbol: '', exchange: '', set
 
 interface AnalyticsProps {
     trades: TradeDetail[]
+    hidePnl: boolean
 }
 
-export function Analytics({ trades }: AnalyticsProps): React.JSX.Element {
+export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Element {
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
     const [dimension, setDimension] = useState<Dimension>('setupTag')
     const [equityVariant, setEquityVariant] = useState<'equity' | 'drawdown'>('equity')
@@ -206,6 +208,28 @@ export function Analytics({ trades }: AnalyticsProps): React.JSX.Element {
                                         : `${summary.wins}W / ${summary.losses}L`
                                 }
                             />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                            <MetricCard
+                                label="Profit Factor"
+                                value={<PnlValue value={formatRatio(summary.profitFactor)} hide={hidePnl} />}
+                                hint={
+                                    !Number.isFinite(summary.profitFactor)
+                                        ? 'Tanpa loss — tidak terhingga'
+                                        : 'Profit kotor ÷ loss kotor'
+                                }
+                                valueClassName={hidePnl ? undefined : 'text-profit'}
+                            />
+                            <MetricCard
+                                label="Expectancy"
+                                value={<PnlValue value={summary.expectancy === null ? '—' : formatPnl(summary.expectancy)} hide={hidePnl} className={summary.expectancy === null ? undefined : pnlColorClass(summary.expectancy)} />}
+                                hint="Rata-rata hasil per trade"
+                            />
+                            <MetricCard
+                                label="P&L Bersih"
+                                value={<PnlValue value={formatPnl(summary.netPnlTotal)} hide={hidePnl} className={pnlColorClass(summary.netPnlTotal)} />}
+                                hint={`Fee ${formatPnl(-summary.feeTotal)} · funding ${formatPnl(-summary.fundingFeeTotal)}`}
+                            />
                             <MetricCard
                                 label="Profit Factor"
                                 value={formatRatio(summary.profitFactor)}
@@ -273,14 +297,11 @@ export function Analytics({ trades }: AnalyticsProps): React.JSX.Element {
                                         ))}
                                     </div>
                                     {equityVariant === 'equity' && (
-                                        <span
-                                            className={cn(
-                                                'tabular text-sm font-semibold',
-                                                pnlColorClass(curve[curve.length - 1]?.equity ?? 0)
-                                            )}
-                                        >
-                                            {formatPnl(curve[curve.length - 1]?.equity ?? 0)}
-                                        </span>
+                                        <PnlValue
+                                            value={formatPnl(curve[curve.length - 1]?.equity ?? 0)}
+                                            hide={hidePnl}
+                                            className={cn('text-sm font-semibold', pnlColorClass(curve[curve.length - 1]?.equity ?? 0))}
+                                        />
                                     )}
                                 </div>
                             </div>
@@ -293,9 +314,8 @@ export function Analytics({ trades }: AnalyticsProps): React.JSX.Element {
                         <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                             <MetricCard
                                 label="Max Drawdown"
-                                value={formatPnl(drawdown.maxDrawdown)}
+                                value={<PnlValue value={formatPnl(drawdown.maxDrawdown)} hide={hidePnl} className={drawdown.maxDrawdown < 0 ? 'text-loss' : undefined} />}
                                 hint="Penurunan terbesar dari puncak"
-                                valueClassName={drawdown.maxDrawdown < 0 ? 'text-loss' : undefined}
                             />
                             <MetricCard
                                 label="Durasi Drawdown"
@@ -318,9 +338,8 @@ export function Analytics({ trades }: AnalyticsProps): React.JSX.Element {
                             />
                             <MetricCard
                                 label="Funding Fee"
-                                value={formatPnl(-summary.fundingFeeTotal)}
+                                value={<PnlValue value={formatPnl(-summary.fundingFeeTotal)} hide={hidePnl} className={summary.fundingFeeTotal > 0 ? 'text-loss' : undefined} />}
                                 hint="Biaya berkelanjutan perpetual"
-                                valueClassName={summary.fundingFeeTotal > 0 ? 'text-loss' : undefined}
                             />
                         </div>
 

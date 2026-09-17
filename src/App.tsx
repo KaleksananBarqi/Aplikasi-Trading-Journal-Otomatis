@@ -3,10 +3,13 @@ import type { TradeDetail } from '@shared/domain'
 import { AppShell, type RouteId } from './components/AppShell'
 import { SyncPanel } from './components/SyncPanel'
 import { Button } from './components/ui'
+import { PnlValue } from './components/PnlValue'
 import { useTheme } from './hooks/useTheme'
 import { useTrades } from './hooks/useTrades'
+import { useHidePnl } from './hooks/useHidePnl'
 import { Analytics } from './routes/Analytics'
 import { Dashboard } from './routes/Dashboard'
+import { ErrorLog } from './routes/ErrorLog'
 import { JournalEntry } from './routes/JournalEntry'
 import { Settings } from './routes/Settings'
 import { TradeEditor } from './routes/TradeEditor'
@@ -31,13 +34,29 @@ export default function App(): React.JSX.Element {
 
     const { theme, colorblindSafe, isDark, setTheme, setColorblindSafe } = useTheme()
     const { trades, meta, loading, error, reload } = useTrades()
+    const { hidePnl, setHidePnl } = useHidePnl()
 
-    // Ambil path DB untuk ditampilkan di Settings.
+    // Ambil path DB untuk ditampilkan di Settings & pasang listener error global.
     useEffect(() => {
         window.api
             .getAppHealth()
             .then((health) => setDbPath(health.dbPath))
             .catch(() => setDbPath('tidak diketahui'))
+
+        const handleGlobalError = (event: ErrorEvent) => {
+            void window.api.logError(event.message, event.error?.stack ?? event.error)
+        }
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            void window.api.logError('Unhandled Promise Rejection di Renderer', event.reason)
+        }
+
+        window.addEventListener('error', handleGlobalError)
+        window.addEventListener('unhandledrejection', handleUnhandledRejection)
+
+        return () => {
+            window.removeEventListener('error', handleGlobalError)
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+        }
     }, [])
 
     const isEditing = creating || editing !== null
@@ -115,9 +134,20 @@ export default function App(): React.JSX.Element {
                         {colorblindSafe ? 'Warna: CB' : 'Warna: Std'}
                     </Button>
                 </div>
+                <div className="flex gap-1">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 flex-1 px-1 text-[10px]"
+                        onClick={() => setHidePnl(!hidePnl)}
+                        title="Sembunyikan semua angka PnL"
+                    >
+                        <PnlValue value={hidePnl ? 'PnL: Tersembunyi' : 'PnL: Terlihat'} hide={hidePnl} />
+                    </Button>
+                </div>
             </div>
         ),
-        [trades.length, error, loading, isDark, colorblindSafe, setTheme, setColorblindSafe]
+        [trades.length, error, loading, isDark, colorblindSafe, setTheme, setColorblindSafe, hidePnl, setHidePnl]
     )
 
     return (
@@ -130,7 +160,7 @@ export default function App(): React.JSX.Element {
                     onCancel={closeEditor}
                 />
             ) : route === 'dashboard' ? (
-                <Dashboard trades={trades} />
+                <Dashboard trades={trades} hidePnl={hidePnl} />
             ) : route === 'trades' ? (
                 <TradeLog
                     trades={trades}
@@ -139,12 +169,13 @@ export default function App(): React.JSX.Element {
                     onEdit={setEditing}
                     onDelete={(detail) => void handleDelete(detail)}
                     onCreate={() => setCreating(true)}
+                    hidePnl={hidePnl}
                 />
             ) : route === 'journal' ? (
                 <JournalEntry trades={trades} onOpen={setEditing} />
             ) : route === 'analytics' ? (
-                <Analytics trades={trades} />
-            ) : (
+                <Analytics trades={trades} hidePnl={hidePnl} />
+            ) : route === 'settings' ? (
                 <Settings
                     theme={theme}
                     colorblindSafe={colorblindSafe}
@@ -155,6 +186,8 @@ export default function App(): React.JSX.Element {
                     onChecklistTemplateSaved={reload}
                     onDataChanged={reload}
                 />
+            ) : (
+                <ErrorLog />
             )}
         </AppShell>
     )

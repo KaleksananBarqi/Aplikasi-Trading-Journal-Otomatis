@@ -32,7 +32,11 @@ export const IPC_CHANNELS = {
     credentialDelete: 'credential:delete',
     syncRun: 'sync:run',
     syncState: 'sync:state',
-    syncProgress: 'sync:progress'
+    syncProgress: 'sync:progress',
+    logsGet: 'logs:get',
+    logsClear: 'logs:clear',
+    logsOpenFolder: 'logs:openFolder',
+    logWrite: 'log:write'
 } as const
 
 /** Exchange yang bisa disinkronkan. */
@@ -93,6 +97,15 @@ export interface AppHealth {
     ok: boolean
     details: string[]
     dbPath: string
+}
+
+/** Entri log yang telah di-parse dari file log lokal. */
+export interface LogEntry {
+    timestamp: string
+    level: 'INFO' | 'WARN' | 'ERROR'
+    message: string
+    details?: string
+    raw: string
 }
 
 /** Hasil operasi tulis. `ok: false` disertai pesan yang bisa ditampilkan ke user. */
@@ -173,6 +186,7 @@ export interface SettingsPayload {
     autoSyncEnabled?: boolean
     autoSyncIntervalMin?: number
     checklistTemplate?: string[]
+    hidePnl?: boolean
 }
 
 /** Bentuk `window.api` yang diekspos preload ke renderer. */
@@ -197,6 +211,12 @@ export interface PreloadApi {
     runSync(): Promise<MutationResult<SyncRunResult>>
     /** Daftarkan listener progres sync. Kembalikan fungsi untuk melepas listener. */
     onSyncProgress(callback: (progress: SyncProgressPayload) => void): () => void
+
+    // --- Logs / Debugging ---
+    getLogs(limit?: number): Promise<MutationResult<LogEntry[]>>
+    clearLogs(): Promise<MutationResult<void>>
+    openLogFolder(): Promise<MutationResult<void>>
+    logError(message: string, details?: unknown): Promise<void>
 }
 
 // Re-export tipe domain yang dipakai renderer, supaya renderer cukup

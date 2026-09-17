@@ -3,6 +3,7 @@ import type { TradeDetail } from '@shared/domain'
 import { PageHeader } from '../components/AppShell'
 import { MetricCard } from '../components/MetricCard'
 import { Badge, EmptyState } from '../components/ui'
+import { PnlValue } from '../components/PnlValue'
 import {
     buildEquityCurve,
     computeDrawdown,
@@ -84,9 +85,10 @@ function EquitySparkline({ points }: { points: { time: number; equity: number }[
 
 interface DashboardProps {
     trades: TradeDetail[]
+    hidePnl: boolean
 }
 
-export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
+export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Element {
     const summary = useMemo(() => summarize(trades), [trades])
     const curve = useMemo(() => buildEquityCurve(trades), [trades])
     const drawdown = useMemo(() => computeDrawdown(curve), [curve])
@@ -129,18 +131,21 @@ export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
                     />
                     <MetricCard
                         label="Profit Factor"
-                        value={formatRatio(summary.profitFactor)}
+                        value={
+                            <PnlValue
+                                value={formatRatio(summary.profitFactor)}
+                                hide={hidePnl}
+                                className={
+                                    !Number.isFinite(summary.profitFactor) || summary.profitFactor >= 1
+                                        ? 'text-profit'
+                                        : 'text-loss'
+                                }
+                            />
+                        }
                         hint={
                             !Number.isFinite(summary.profitFactor)
                                 ? 'Tanpa loss — tidak terhingga'
                                 : 'Profit kotor / loss kotor'
-                        }
-                        valueClassName={
-                            !Number.isFinite(summary.profitFactor)
-                                ? 'text-profit'
-                                : summary.profitFactor >= 1
-                                    ? 'text-profit'
-                                    : 'text-loss'
                         }
                     />
                     <MetricCard
@@ -151,22 +156,20 @@ export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
                     />
                     <MetricCard
                         label="P&L Bersih"
-                        value={formatPnl(summary.netPnlTotal)}
+                        value={<PnlValue value={formatPnl(summary.netPnlTotal)} hide={hidePnl} className={pnlColorClass(summary.netPnlTotal)} />}
                         hint={`Kotor ${formatPnl(summary.grossPnlTotal)} · fee ${formatPnl(-summary.feeTotal)}`}
-                        valueClassName={pnlColorClass(summary.netPnlTotal)}
                     />
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <MetricCard
                         label="Max Drawdown"
-                        value={formatPnl(drawdown.maxDrawdown)}
+                        value={<PnlValue value={formatPnl(drawdown.maxDrawdown)} hide={hidePnl} className={drawdown.maxDrawdown < 0 ? 'text-loss' : undefined} />}
                         hint={
                             drawdown.maxDrawdownTime
                                 ? `Terburuk ${formatDateTime(drawdown.maxDrawdownTime)}`
                                 : 'Belum ada drawdown'
                         }
-                        valueClassName={drawdown.maxDrawdown < 0 ? 'text-loss' : undefined}
                     />
                     <MetricCard
                         label="Durasi Drawdown"
@@ -179,9 +182,8 @@ export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
                     />
                     <MetricCard
                         label="Funding Fee"
-                        value={formatPnl(-summary.fundingFeeTotal)}
+                        value={<PnlValue value={formatPnl(-summary.fundingFeeTotal)} hide={hidePnl} className={summary.fundingFeeTotal > 0 ? 'text-loss' : undefined} />}
                         hint="Biaya berkelanjutan perpetual futures"
-                        valueClassName={summary.fundingFeeTotal > 0 ? 'text-loss' : undefined}
                     />
                     <MetricCard
                         label="R Valid"
@@ -204,14 +206,11 @@ export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
                                 Kumulatif P&L bersih menurut waktu exit
                             </p>
                         </div>
-                        <span
-                            className={cn(
-                                'tabular text-sm font-semibold',
-                                pnlColorClass(curve[curve.length - 1]?.equity ?? 0)
-                            )}
-                        >
-                            {formatPnl(curve[curve.length - 1]?.equity ?? 0)}
-                        </span>
+                        <PnlValue
+                            value={formatPnl(curve[curve.length - 1]?.equity ?? 0)}
+                            hide={hidePnl}
+                            className={cn('text-sm font-semibold', pnlColorClass(curve[curve.length - 1]?.equity ?? 0))}
+                        />
                     </div>
                     <div className="px-2 py-3">
                         <EquitySparkline points={curve} />
@@ -247,17 +246,16 @@ export function Dashboard({ trades }: DashboardProps): React.JSX.Element {
                                     <span className="tabular text-muted-foreground">
                                         {formatDateTime(detail.trade.exitTime)}
                                     </span>
-                                    <span className={cn('tabular w-20 text-right text-xs', rColorClass(detail.rMultiple))}>
-                                        {formatR(detail.rMultiple)}
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            'tabular w-24 text-right font-medium',
-                                            pnlColorClass(detail.trade.realizedPnl)
-                                        )}
-                                    >
-                                        {formatPnl(detail.trade.realizedPnl)}
-                                    </span>
+                                    <PnlValue
+                                        value={formatR(detail.rMultiple)}
+                                        hide={hidePnl}
+                                        className={cn('w-20 text-right text-xs', rColorClass(detail.rMultiple))}
+                                    />
+                                    <PnlValue
+                                        value={formatPnl(detail.trade.realizedPnl)}
+                                        hide={hidePnl}
+                                        className={cn('w-24 text-right font-medium', pnlColorClass(detail.trade.realizedPnl))}
+                                    />
                                 </div>
                             </div>
                         ))}

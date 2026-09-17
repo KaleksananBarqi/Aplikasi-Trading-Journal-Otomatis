@@ -1,6 +1,7 @@
-import { app } from 'electron'
-import { existsSync, mkdirSync, appendFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { app, shell } from 'electron'
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import type { LogEntry } from '../../shared/ipc-contract'
 
 /**
  * File logger terpusat untuk Main Process dan skrip pengujian.
@@ -70,7 +71,7 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, details?: u
     // Append ke file log
     try {
         const filePath = getLogFilePath()
-        const parentDir = join(filePath, '..')
+        const parentDir = dirname(filePath)
         if (!existsSync(parentDir)) {
             mkdirSync(parentDir, { recursive: true })
         }
@@ -78,6 +79,81 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', message: string, details?: u
     } catch (err) {
         console.error('[logger] Gagal menulis ke file log:', err)
     }
+}
+
+export function readLogs(limit: number = 500): LogEntry[] {
+    const filePath = getLogFilePath()
+    if (!existsSync(filePath)) return []
+
+    try {
+        const content = readFileSync(filePath, 'utf8')
+        if (!content.trim()) return []
+
+        const lines = content.split(/\r?\n/)
+        const entries: LogEntry[] = []
+        let currentEntry: LogEntry | null = null
+
+        const headerRegex = /^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]\s+\[(INFO|WARN|ERROR)\]\s+(.*)$/
+
+        for (const line of lines) {
+            const match = line.match(headerRegex)
+            if (match) {
+                if (currentEntry) {
+                    entries.push(currentEntry)
+                }
+                currentEntry = {
+                    timestamp: match[1] ?? new Date().toISOString(),
+                    level: (match[2] ?? 'INFO') as 'INFO' | 'WARN' | 'ERROR',
+                    message: match[3] ?? '',
+                    details: '',
+                    raw: line
+                }
+            } else if (currentEntry) {
+                if (line.trim()) {
+                    currentEntry.details = currentEntry.details
+                        ? currentEntry.details + '\n' + line
+                        : line
+                }
+                currentEntry.raw += '\n' + line
+            }
+        }
+        if (currentEntry) {
+            entries.push(currentEntry)
+        }
+
+        entries.forEach((e) => {
+            if (e.details && e.details.trim()) {
+                e.details = e.details.trim()
+            } else {
+                delete e.details
+            }
+        })
+
+        return entries.reverse().slice(0, limit)
+    } catch (err) {
+        console.error('[logger] Gagal membaca file log:', err)
+        return []
+    }
+}
+
+export function clearLogs(): void {
+    const filePath = getLogFilePath()
+    try {
+        if (existsSync(filePath)) {
+            writeFileSync(filePath, '', 'utf8')
+        }
+    } catch (err) {
+        console.error('[logger] Gagal membersihkan file log:', err)
+    }
+}
+
+export async function openLogFolder(): Promise<void> {
+    const filePath = getLogFilePath()
+    const folderPath = dirname(filePath)
+    if (!existsSync(folderPath)) {
+        mkdirSync(folderPath, { recursive: true })
+    }
+    await shell.openPath(folderPath)
 }
 
 export const logger = {
@@ -92,6 +168,15 @@ export const logger = {
     },
     getLogPath(): string {
         return getLogFilePath()
+    },
+    readLogs(limit?: number): LogEntry[] {
+        return readLogs(limit)
+    },
+    clearLogs(): void {
+        clearLogs()
+    },
+    async openLogFolder(): Promise<void> {
+        await openLogFolder()
     },
     initGlobalErrorHandlers(): void {
         process.on('uncaughtException', (error) => {

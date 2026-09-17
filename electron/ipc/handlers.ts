@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import {
     IPC_CHANNELS,
     type AppHealth,
+    type LogEntry,
     type MutationResult,
     type SettingsPayload,
     type TradeFilterPayload,
@@ -9,6 +10,7 @@ import {
     type TradeSavePayload
 } from '../../shared/ipc-contract'
 import { getDb, getDbPath, runSmokeTest } from '../db/index'
+import { logger } from '../utils/logger'
 import {
     countTrades,
     createTrade,
@@ -131,6 +133,37 @@ export function registerIpcHandlers(): void {
                     setSetting(db, SETTING_KEYS.autoSyncIntervalMin, payload.autoSyncIntervalMin)
                 if (payload.checklistTemplate !== undefined)
                     setSetting(db, SETTING_KEYS.checklistTemplate, payload.checklistTemplate)
+                if (payload.hidePnl !== undefined)
+                    setSetting(db, SETTING_KEYS.hidePnl, payload.hidePnl)
             })
+    )
+
+    // --- Logs / Debugging ----------------------------------------------------
+
+    ipcMain.handle(
+        IPC_CHANNELS.logsGet,
+        (_event, limit?: number): MutationResult<LogEntry[]> =>
+            safe(() => logger.readLogs(limit))
+    )
+
+    ipcMain.handle(IPC_CHANNELS.logsClear, (): MutationResult<void> =>
+        safe(() => logger.clearLogs())
+    )
+
+    ipcMain.handle(IPC_CHANNELS.logsOpenFolder, async (): Promise<MutationResult<void>> => {
+        try {
+            await logger.openLogFolder()
+            return { ok: true }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { ok: false, error: message }
+        }
+    })
+
+    ipcMain.handle(
+        IPC_CHANNELS.logWrite,
+        (_event, { message, details }: { message: string; details?: unknown }): void => {
+            logger.error(`[Renderer] ${message}`, details)
+        }
     )
 }
