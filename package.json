@@ -1,6 +1,6 @@
 {
     "name": "aplikasi-trading-journal-otomatis",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "private": true,
     "description": "Trading journal otomatis read-only untuk MEXC & Bitunix Futures (desktop lokal, single user)",
     "author": "",
