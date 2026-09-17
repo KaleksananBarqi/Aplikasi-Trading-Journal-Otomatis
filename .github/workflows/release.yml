@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      # Satu platform gagal jangan membatalkan job platform lain,
+      # supaya log kegagalan tiap OS tetap bisa dibaca.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
@@ -34,19 +37,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # On Windows we need Wine for building the Windows installer if not using native runner
-      - name: Install Wine (Linux only)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y wine
+      # Catatan: tiap runner membangun target platform-nya SENDIRI
+      # (linux -> AppImage, mac -> dmg, win -> nsis). Tidak ada cross-build,
+      # jadi Wine tidak pernah dipakai. Langkah instalasi Wine yang lama
+      # dihapus karena hanya menambah waktu CI tanpa efek apa pun.
 
-      - name: Build application
+      # WAJIB ADA. `electron-vite build` yang menghasilkan out/main/index.js,
+      # out/preload/index.js, dan out/renderer/**. Tanpa langkah ini,
+      # electron-builder tidak menemukan entry point `main` di package.json
+      # dan gagal dengan:
+      #   Application entry file "out/main/index.js" ... was not found in this archive
+      - name: Build application (main, preload, renderer)
+        run: npm run build
+
+      # Packaging dipisah dari build supaya kalau gagal, jelas mana yang salah:
+      # compile (electron-vite) atau packaging (electron-builder).
+      - name: Package application
         run: npx electron-builder --publish=never
+        env:
+          # CI tidak punya sertifikat code signing. Matikan auto-discovery agar
+          # electron-builder tidak mencari identity di keychain macOS.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      # PENTING: output electron-builder ada di `release/`, bukan `dist/`
+      # (lihat electron-builder.yml -> directories.output). Path lama `dist/*`
+      # tidak pernah berisi apa pun, sehingga artifact ter-upload kosong.
+      #
+      # Globs ditulis eksplisit, TIDAK pakai `release/*`, supaya folder hasil
+      # unpack (`win-unpacked/`, `mac/`) yang isinya ribuan file tidak ikut
+      # ter-upload. Yang diinginkan hanya installer + file pendampingnya.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-artifact
-          path: dist/*
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.AppImage
+            release/*.dmg
+            release/*.blockmap
+            release/latest*.yml
 
   release:
     needs: build
@@ -62,13 +92,23 @@ jobs:
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          # Combine all files from each OS into a single release
-          assets=""
-          for file in $(find ./artifacts -type f); do
-            assets+=" $file"
-          done
-          gh release create ${{ github.ref_name }} $assets \
-            --repo ${{ github.repository }} \
+          # Gabungkan semua file dari tiap OS ke satu release.
+          # Pakai array + `-print0` karena nama artifact (productName) mengandung
+          # spasi ("Aplikasi Trading Journal Otomatis-1.0.1.AppImage").
+          # Ekspansi variabel tanpa quote akan memecah path per spasi dan
+          # membuat `gh release create` gagal.
+          mapfile -d '' assets < <(find ./artifacts -type f -print0)
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "Tidak ada artifact yang bisa di-upload ke release." >&2
+            exit 1
+          fi
+
+          printf 'Asset yang akan di-upload:\n%s\n' "${assets[@]}"
+
+          gh release create "${{ github.ref_name }}" "${assets[@]}" \
+            --repo "${{ github.repository }}" \
             --title "Release ${{ github.ref_name }}" \
-            --notes "Auto‑generated release for ${{ github.ref_name }}.\n\n"$(git log -1 --pretty=%B)""
+            --notes "Auto-generated release for ${{ github.ref_name }}."
