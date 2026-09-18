@@ -151,6 +151,21 @@ export function TradeEditor({
         setForm((prev) => ({ ...prev, [key]: value }))
     }
 
+    /**
+     * Handler khusus untuk Stop Loss Direncanakan.
+     * Jika Entry Price dan Size sudah terisi, Nominal Risiko akan dihitung otomatis:
+     * Nominal Risiko = |Entry Price − Stop Loss| × Size
+     */
+    function handlePlannedStopChange(v: number | null): void {
+        setForm((prev) => {
+            const updates: Partial<FormState> = { plannedStop: v }
+            if (v !== null && prev.entryPrice !== null && prev.size !== null) {
+                updates.riskAmount = Math.abs(prev.entryPrice - v) * prev.size
+            }
+            return { ...prev, ...updates }
+        })
+    }
+
     const validation = useMemo((): string | null => {
         if (form.symbol.trim() === '') return 'Symbol wajib diisi.'
         if (form.entryPrice === null) return 'Harga entry wajib diisi.'
@@ -390,8 +405,15 @@ export function TradeEditor({
                             description="Opsional. Tanpa stop loss, R-multiple bernilai kosong — bukan nol."
                         />
                         <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
-                            <Field label="Stop Loss Direncanakan">
-                                <NumberInput value={form.plannedStop} onValueChange={(v) => update('plannedStop', v)} />
+                            <Field
+                                label="Stop Loss Direncanakan"
+                                hint={
+                                    form.entryPrice !== null && form.size !== null
+                                        ? 'Akan menghitung nominal risiko otomatis'
+                                        : 'Lengkapi entry & size untuk auto-hitung'
+                                }
+                            >
+                                <NumberInput value={form.plannedStop} onValueChange={handlePlannedStopChange} />
                             </Field>
                             <Field label="Target Direncanakan">
                                 <NumberInput
@@ -399,7 +421,16 @@ export function TradeEditor({
                                     onValueChange={(v) => update('plannedTarget', v)}
                                 />
                             </Field>
-                            <Field label="Nominal Risiko" hint="Dasar perhitungan R">
+                            <Field
+                                label="Nominal Risiko"
+                                hint={
+                                    form.plannedStop !== null &&
+                                    form.entryPrice !== null &&
+                                    form.size !== null
+                                        ? 'Dihitung dari stop loss · bisa diubah manual'
+                                        : 'Dasar perhitungan R'
+                                }
+                            >
                                 <NumberInput value={form.riskAmount} onValueChange={(v) => update('riskAmount', v)} />
                             </Field>
                             <Field
