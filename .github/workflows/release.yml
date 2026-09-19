@@ -10,6 +10,7 @@ on:
       tag_name:
         description: 'Tag versi yang ingin dirilis (misal: v1.2.0)'
         required: false
+        type: string
         default: ''
 
 jobs:
@@ -88,8 +89,16 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to create a GitHub Release
+      contents: write  # Diperlukan untuk membuat GitHub Release
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -98,11 +107,11 @@ jobs:
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ github.event.inputs.tag_name }}
         shell: bash
         run: |
           # Tentukan tag release
-          TAG="${{ inputs.tag_name || github.ref_name }}"
-          CLEAN_VERSION="${TAG#v}"
+          TAG="${INPUT_TAG:-${GITHUB_REF_NAME}}"
 
           # Gabungkan semua file dari tiap OS ke satu release.
           mapfile -d '' assets < <(find ./artifacts -type f -print0)
@@ -114,24 +123,9 @@ jobs:
 
           printf 'Asset yang akan di-upload:\n%s\n' "${assets[@]}"
 
-          # Ekstrak catatan fitur dari CHANGELOG.md untuk versi yang sesuai
+          # Ekstrak catatan fitur dari CHANGELOG.md menggunakan skrip Node.js
           NOTES_FILE="release_notes.txt"
-          if [ -f "CHANGELOG.md" ]; then
-            python3 -c "
-import sys, re
-ver = sys.argv[1]
-try:
-    with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
-        content = f.read()
-    pattern = rf'## \[{re.escape(ver)}\][^\n]*\n(.*?)(?=\n## \[|\Z)'
-    match = re.search(pattern, content, re.DOTALL)
-    if match:
-        with open('release_notes.txt', 'w', encoding='utf-8') as out:
-            out.write(match.group(1).strip())
-except Exception:
-    pass
-" "$CLEAN_VERSION"
-          fi
+          node scripts/extract-release-notes.cjs "$TAG" "$NOTES_FILE"
 
           if [ -s "$NOTES_FILE" ]; then
             gh release create "$TAG" "${assets[@]}" \
