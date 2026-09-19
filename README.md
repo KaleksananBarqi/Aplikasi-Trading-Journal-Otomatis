@@ -12,11 +12,15 @@ Bukan web app, bukan SaaS, bukan trading bot. **Tidak ada kemampuan eksekusi ord
 
 | Aspek | Nilai |
 |---|---|
+| Versi | 1.1.0 |
 | Platform | Electron + React 19 + TypeScript + Vite 7 |
 | Database | SQLite lokal (`better-sqlite3`, prebuilt N-API) |
 | Styling | Tailwind v4 (plugin Vite, bukan PostCSS) |
 | Chart | `lightweight-charts` v5 (equity/drawdown) + SVG sendiri (heatmap, histogram, scatter) |
 | Exchange | MEXC via `ccxt` (certified) · Bitunix via REST resmi (manual) |
+| AI | OpenAI-compatible Chat Completions API (fitur opsional) |
+| Backup | Google Drive via OAuth 2.0 PKCE (satu arah) |
+| Ekspor | CSV (UTF-8 BOM), JSON, PDF (Chromium offscreen) |
 | Kredensial | `safeStorage` bawaan Electron — DPAPI / Keychain / libsecret |
 | Installer | `electron-builder` → NSIS `.exe` |
 
@@ -47,7 +51,7 @@ Installer bisa diklik dua kali — tidak perlu command line, Docker, atau databa
 
 ## Verifikasi
 
-Proyek ini punya 300+ pemeriksaan otomatis. Semuanya bisa dijalankan ulang:
+Proyek ini punya 349 pemeriksaan otomatis. Semuanya bisa dijalankan ulang:
 
 ```bash
 npm run verify              # seluruh rangkaian (typecheck + semua fase)
@@ -79,6 +83,26 @@ Hasil terakhir: **semua lulus**. Lihat [`plans/SESSION.md`](plans/SESSION.md:1) 
   buruk bisa untung. Menggabungkannya akan membuat Anda salah belajar dari data sendiri.
 - Jurnal **tidak pernah** disentuh sync engine — catatan subjektif Anda aman dari tertimpa.
 
+### Screenshot
+- Unggah screenshot langsung ke trade dari Trade Editor.
+- File disimpan di folder terkelola `userData/data/screenshots` dengan nama generik.
+- Validasi ekstensi (PNG/JPG/WebP/GIF) dan magic bytes — file bukan gambar ditolak.
+- Batas ukuran 4 MB. Path traversal dicegah: nama file generik, bukan input user.
+- Screenshot ikut ter-backup ke Google Drive saat backup dijalankan.
+
+### RR Rencana Otomatis
+- `plannedRr` dihitung otomatis dari entry, SL, dan TP saat Anda mengisi ketiganya.
+- Long: `reward = |target - entry|`, Short: `reward = |entry - target|`.
+- Jika SL kosong atau sama dengan entry, RR tetap `null` — bukan nol buatan.
+- RR Rencana ditampilkan terpisah dari R-Multiple Realisasi.
+
+### Tag Kustom Banyak Nilai
+- Satu trade bisa memiliki banyak tag bebas (mis. `BTC_Scalp`, `SalahEksekusi`).
+- `setup_tag` lama tetap dipertahankan untuk kompatibilitas data lama.
+- Autocomplete dari tag yang pernah dipakai.
+- Filter multi-tag memakai semantik **SEMUA tag harus ada** agar hasil lebih presisi.
+- Tag ditampilkan sebagai chip di daftar trade, detail jurnal, dan hasil ekspor.
+
 ### Analitik
 - Equity curve, kurva drawdown (underwater), kalender heatmap harian.
 - Win rate, profit factor, expectancy sebagai headline metrics.
@@ -87,9 +111,33 @@ Hasil terakhir: **semua lulus**. Lihat [`plans/SESSION.md`](plans/SESSION.md:1) 
 - Scatter grade vs P&L — sengaja **tanpa** garis tren atau skor korelasi.
 - Filter global yang berlaku untuk semua chart sekaligus.
 
+### Ekspor Journal
+- **CSV** dengan UTF-8 BOM agar Excel membaca encoding dengan benar. Escaping RFC 4180.
+- **JSON** pretty-print 2 spasi, UTF-8.
+- **PDF** dirender dari HTML via Chromium offscreen `BrowserWindow.printToPDF()`.
+- File disimpan lewat `dialog.showSaveDialog()` — tidak ada penulisan diam-diam.
+- Filter aktif diterapkan ke hasil ekspor.
+
+### Backup Google Drive
+- OAuth 2.0 PKCE dengan loopback redirect (`http://localhost:PORT`).
+- Token disimpan via `safeStorage` — tidak ada `client_secret` (desktop app flow).
+- Backup **satu arah**: snapshot JSON semua trade + screenshot diunggah ke folder
+  "Trading Journal Backup" di Drive Anda.
+- Tidak ada restore otomatis — bisa menimpa data finansial tanpa konfirmasi.
+- Set environment variable `GDRIVE_CLIENT_ID` dengan Client ID Google Cloud Console Anda.
+
+### Wawasan AI (opsional)
+- Analisa otomatis pola kelemahan dan saran perbaikan dari data journal.
+- Memakai OpenAI Chat Completions API (kompatibel dengan provider OpenAI-compatible).
+- API key disimpan via `safeStorage`. Model dan base URL dikonfigurasi di Settings.
+- Prompt terstruktur dalam Bahasa Indonesia, meminta output JSON stabil.
+- Hasil: ringkasan, pola kelemahan, saran perbaikan, dan metrik.
+- **Bukan nasihat keuangan.** Tidak ada saran order atau sinyal entry.
+
 ### Tampilan
 - Dark mode default, dengan opsi light dan ikuti sistem.
 - **Mode colorblind-safe** — hijau/merah menjadi biru/oranye.
+- **Hide P&L** — sembunyikan semua angka P&L dengan satu toggle (privasi saat screen share).
 - Font monospace untuk angka dan tabel, sans-serif untuk teks naratif.
 
 ---
@@ -126,6 +174,14 @@ Tidak ada HMAC sama sekali. Diverifikasi dari SDK resmi Bitunix dan dokumentasi 
 Default-nya electron-builder menjalankan `@electron/rebuild`, yang **membuat packaging gagal total**
 tanpa Visual Studio. Rebuild itu tidak diperlukan karena prebuilt N-API sudah ABI-stabil.
 
+### 5. PDF tanpa dependency eksternal
+PDF dibuat dari HTML via `BrowserWindow.offscreen` + `printToPDF()` — Electron sudah punya Chromium,
+tidak perlu library PDF tambahan.
+
+### 6. Backup Google Drive: satu arah
+Tidak ada download/restore otomatis. Alasan: restore otomatis bisa menimpa data lokal tanpa
+konfirmasi user, yang berbahaya untuk data finansial.
+
 ---
 
 ## Keterbatasan yang Diketahui
@@ -137,6 +193,8 @@ tanpa Visual Studio. Rebuild itu tidak diperlukan karena prebuilt N-API sudah AB
 | **Belum diuji di mesin bersih** | Butuh VM tanpa Node/Python | Installer terbentuk & isinya terverifikasi, tapi instalasi di mesin bersih belum dijalankan |
 | **Belum sync akun nyata** | Butuh API key read-only dari user | Idempotensi terbukti dengan data deterministik, bukan dengan API live |
 | **Tanpa code signing** | Build personal tanpa sertifikat | Windows SmartScreen akan menampilkan peringatan saat installer dibuka |
+| **AI hanya analisa teks** | Implementasi awal | Screenshot tidak dikirim sebagai input vision. Hanya data terstruktur dan teks jurnal |
+| **Google Drive Client ID perlu diset** | Tidak ada default hardcoded | Set `GDRIVE_CLIENT_ID` environment variable sebelum bisa menghubungkan Drive |
 
 ---
 
@@ -145,9 +203,11 @@ tanpa Visual Studio. Rebuild itu tidak diperlukan karena prebuilt N-API sudah AB
 - Kredensial disimpan lewat `safeStorage` — **tidak pernah** di file plaintext, database, atau `.env`.
 - Kredensial mengalir **satu arah**: renderer → main. Renderer tidak pernah menerimanya kembali;
   yang dibaca hanya status + petunjuk kunci (mis. `a1b2…f9`).
+- API key AI dan token Google Drive juga disimpan via `safeStorage` — pola yang sama.
 - Kalau `safeStorage` tidak tersedia, penyimpanan **ditolak** — tidak ada fallback plaintext.
 - CSP melarang renderer menghubungi apa pun (`connect-src 'none'`). Tidak ada telemetry.
-- Semua panggilan network dilakukan dari main process.
+- Semua panggilan network (exchange, OpenAI, Google Drive) dilakukan dari main process.
+- Screenshot divalidasi: ekstensi, magic bytes, batas ukuran, dan nama generik anti path traversal.
 
 ### Membuat API key yang benar
 Saat mengisi API key di Settings, **hanya aktifkan izin baca**. Jangan aktifkan izin trading atau
@@ -162,15 +222,20 @@ sekalipun Anda memberinya izin tersebut.
 electron/            main process — akses Node penuh
   main.ts            entry, window, single-instance lock
   preload.ts         contextBridge — surface IPC sempit & bertipe
-  credentials/       safeStorage wrapper
+  credentials/       safeStorage wrapper (exchange + AI + Google Drive)
   db/                koneksi, migrasi, repositories
   exchanges/         adapter per exchange (mexc/, bitunix/) + kontrak types.ts
   sync/              sync engine — exchange-agnostic
   ipc/               handlers
+  ai/                OpenAI-compatible API integration
+  backup/            Google Drive OAuth PKCE + backup engine
+  export/            CSV, JSON, PDF formatters
+  screenshots/       manajemen file screenshot lokal
 
 src/                 renderer — TANPA akses Node
-  routes/            Dashboard, TradeLog, JournalEntry, Analytics, Settings
-  components/        UI primitives + charts
+  routes/            Dashboard, TradeLog, JournalEntry, TradeEditor, Analytics, Settings, ErrorLog
+  components/        UI primitives + charts + AiInsightsPanel + BackupPanel
+  hooks/             useTheme, useHidePnl, useTrades
   lib/analytics/     metrik & dimensi (fungsi murni, teruji)
 
 shared/              tipe & kontrak IPC (dipakai kedua sisi)
@@ -190,7 +255,10 @@ scripts/             verifikasi & launcher
 | [`plans/01-ARCHITECTURE.md`](plans/01-ARCHITECTURE.md:1) | Keputusan terkunci, struktur, kontrak adapter, batas sesi |
 | [`plans/02-DATA-MODEL.md`](plans/02-DATA-MODEL.md:1) | Skema SQLite, PRAGMA wajib, aturan migrasi |
 | [`plans/03-PHASES.md`](plans/03-PHASES.md:1) | Fase 0–5 dengan kriteria verifikasi & temuan |
+| [`plans/04-FEATURES.md`](plans/04-FEATURES.md:1) | Rencana implementasi enam fitur tambahan |
+| [`plans/05-FEATURES-PLAN.md`](plans/05-FEATURES-PLAN.md:1) | Detail langkah implementasi fitur |
 | [`plans/SESSION.md`](plans/SESSION.md:1) | Status per fase |
+| [`docs/git-tagging-steps.md`](docs/git-tagging-steps.md:1) | Langkah tagging rilis Git |
 
 ---
 
