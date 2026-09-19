@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { ExecutionGrade, TradeDetail } from '@shared/domain'
 import { PageHeader } from '../components/AppShell'
 import { Badge, Button, EmptyState } from '../components/ui'
+import { SharePnlModal } from '../components/SharePnlModal'
 import { formatDateTime, formatPnl, formatR, pnlColorClass, rColorClass } from '../lib/format'
 import { cn } from '../lib/utils'
 
@@ -26,6 +27,7 @@ interface JournalEntryProps {
 
 export function JournalEntry({ trades, onOpen }: JournalEntryProps): React.JSX.Element {
     const [filter, setFilter] = useState<Filter>('all')
+    const [sharePnlDetail, setSharePnlDetail] = useState<TradeDetail | null>(null)
 
     const filtered = useMemo(() => {
         const sorted = [...trades].sort((a, b) => b.trade.exitTime - a.trade.exitTime)
@@ -158,9 +160,19 @@ export function JournalEntry({ trades, onOpen }: JournalEntryProps): React.JSX.E
                                                 {formatR(detail.rMultiple)}
                                             </span>
                                             <GradeDisplay grade={detail.journal?.executionGrade ?? null} />
-                                            <Button size="sm" variant="outline" onClick={() => onOpen(detail)}>
-                                                Buka Jurnal
-                                            </Button>
+                                            <div className="flex items-center gap-1 mt-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-8 px-2 text-[11px] text-primary hover:bg-primary/10"
+                                                    onClick={() => setSharePnlDetail(detail)}
+                                                >
+                                                    ✨ Pamer
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => onOpen(detail)}>
+                                                    Buka Jurnal
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </article>
@@ -169,6 +181,15 @@ export function JournalEntry({ trades, onOpen }: JournalEntryProps): React.JSX.E
                     </div>
                 )}
             </div>
+
+            {/* Modal Pamer PnL Per Trade */}
+            {sharePnlDetail && (
+                <SharePnlModal
+                    isOpen={Boolean(sharePnlDetail)}
+                    onClose={() => setSharePnlDetail(null)}
+                    detail={sharePnlDetail}
+                />
+            )}
         </div>
     )
 }

@@ -24,8 +24,8 @@
  * Tidak ada client_secret — PKCE flow untuk installed apps tidak butuh secret.
  */
 
-import { app, safeStorage, shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { app, dialog, safeStorage, shell } from 'electron'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
 import { randomBytes, createHash } from 'node:crypto'
@@ -42,13 +42,15 @@ const DEFAULT_REDIRECT_PORT = 17380
 const OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 /**
- * Client ID OAuth Google.
- *
- * CATATAN: Untuk desktop apps (installed apps), client ID bersifat publik
- * dan tidak ada client_secret. Keamanannya ada di PKCE verifier+challenge.
- * User perlu mengganti ini dengan Client ID mereka sendiri dari Google Cloud Console.
+ * Dapatkan Client ID Google Cloud OAuth yang aktif.
+ * Prioritas: DB settings -> environment variable GDRIVE_CLIENT_ID.
  */
-const OAUTH_CLIENT_ID = process.env.GDRIVE_CLIENT_ID ?? ''
+export function getEffectiveClientId(): string {
+    const db = getDb()
+    const configured = getSetting<string>(db, SETTING_KEYS.gdriveClientId, '')
+    return configured || process.env.GDRIVE_CLIENT_ID || ''
+}
+
 
 // ---------------------------------------------------------------------------
 // Token storage (safeStorage)
@@ -130,10 +132,10 @@ function generatePkce(): { verifier: string; challenge: string } {
     return { verifier, challenge: hash }
 }
 
-function buildAuthUrl(challenge: string, port: number, state: string): string {
+function buildAuthUrl(challenge: string, port: number, state: string, clientId: string): string {
     const redirectUri = `http://localhost:${port}`
     const params = new URLSearchParams({
-        client_id: OAUTH_CLIENT_ID,
+        client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: OAUTH_SCOPE,
@@ -146,10 +148,10 @@ function buildAuthUrl(challenge: string, port: number, state: string): string {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
 }
 
-async function exchangeCodeForToken(code: string, verifier: string, port: number): Promise<TokenData> {
+async function exchangeCodeForToken(code: string, verifier: string, port: number, clientId: string): Promise<TokenData> {
     const redirectUri = `http://localhost:${port}`
     const body = new URLSearchParams({
-        client_id: OAUTH_CLIENT_ID,
+        client_id: clientId,
         code,
         code_verifier: verifier,
         grant_type: 'authorization_code',
@@ -196,11 +198,18 @@ async function exchangeCodeForToken(code: string, verifier: string, port: number
     }
 }
 
-export async function startOAuthFlow(): Promise<void> {
-    if (!OAUTH_CLIENT_ID) {
+export async function startOAuthFlow(clientIdOverride?: string): Promise<void> {
+    const db = getDb()
+    if (clientIdOverride && clientIdOverride.trim()) {
+        setSetting(db, SETTING_KEYS.gdriveClientId, clientIdOverride.trim())
+    }
+
+    const clientId = clientIdOverride?.trim() || getEffectiveClientId()
+
+    if (!clientId) {
         throw new Error(
             'Google Drive Client ID belum dikonfigurasi. ' +
-            'Set environment variable GDRIVE_CLIENT_ID atau konfigurasi di Settings.'
+            'Silakan masukkan Client ID di menu Pengaturan atau gunakan opsi Folder Sync lokal.'
         )
     }
     if (!isSafeStorageAvailable()) {
@@ -211,7 +220,7 @@ export async function startOAuthFlow(): Promise<void> {
     const { verifier, challenge } = generatePkce()
     const state = randomBytes(16).toString('hex')
 
-    const authUrl = buildAuthUrl(challenge, port, state)
+    const authUrl = buildAuthUrl(challenge, port, state, clientId)
 
     // Jalankan server redirect sementara.
     const server = createServer(async (req, res) => {
@@ -236,17 +245,17 @@ export async function startOAuthFlow(): Promise<void> {
 
         if (code) {
             try {
-                const token = await exchangeCodeForToken(code, verifier, port)
+                const token = await exchangeCodeForToken(code, verifier, port, clientId)
                 saveToken(token)
 
-                const db = getDb()
                 setSetting(db, SETTING_KEYS.gdriveEmail, token.email ?? '')
                 setSetting(db, SETTING_KEYS.gdriveFolderId, '')
                 setSetting(db, SETTING_KEYS.gdriveLastBackupAt, 0)
+                setSetting(db, SETTING_KEYS.gdriveSyncMode, 'oauth')
 
                 res.writeHead(200, { 'Content-Type': 'text/html' })
                 res.end('<html><body><h2>Google Drive terhubung!</h2><p>Anda bisa menutup jendela ini dan kembali ke aplikasi.</p></body></html>')
-                logger.info('[backup] Google Drive berhasil terhubung.')
+                logger.info('[backup] Google Drive berhasil terhubung via OAuth.')
             } catch (err) {
                 res.writeHead(500, { 'Content-Type': 'text/html' })
                 res.end(`<html><body><h2>Gagal menghubungkan.</h2><p>${err instanceof Error ? err.message : String(err)}</p></body></html>`)
@@ -277,6 +286,28 @@ export async function startOAuthFlow(): Promise<void> {
     }, 5 * 60 * 1000)
 }
 
+/**
+ * Dialog pemilih folder Google Drive lokal di PC pengguna.
+ */
+export async function selectLocalFolder(): Promise<string | null> {
+    const result = await dialog.showOpenDialog({
+        title: 'Pilih Folder Sinkronisasi Google Drive / Cadangan',
+        properties: ['openDirectory', 'createDirectory']
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+        return null
+    }
+
+    const chosen = result.filePaths[0]
+    const db = getDb()
+    setSetting(db, SETTING_KEYS.gdriveLocalFolder, chosen)
+    setSetting(db, SETTING_KEYS.gdriveSyncMode, 'folder')
+    logger.info(`[backup] Folder lokal disetel ke: ${chosen}`)
+    return chosen ?? null
+}
+
+
 // ---------------------------------------------------------------------------
 // Status
 // -----------------------------------------------------------------------
@@ -287,13 +318,19 @@ export function getBackupStatus(): BackupStatusPayload {
     const email = getSetting<string>(db, SETTING_KEYS.gdriveEmail, '')
     const folder = getSetting<string>(db, SETTING_KEYS.gdriveFolderId, '')
     const lastBackupAt = getSetting<number>(db, SETTING_KEYS.gdriveLastBackupAt, 0)
+    const localFolder = getSetting<string>(db, SETTING_KEYS.gdriveLocalFolder, '')
+    const syncMode = getSetting<'folder' | 'oauth'>(db, SETTING_KEYS.gdriveSyncMode, localFolder ? 'folder' : 'oauth')
+    const clientId = getEffectiveClientId()
 
     return {
-        connected: token !== null,
+        connected: token !== null || Boolean(localFolder),
         email: email || null,
         folder: folder || null,
         lastBackupAt: lastBackupAt || null,
-        nextBackupAt: null
+        nextBackupAt: null,
+        syncMode,
+        localFolder: localFolder || null,
+        clientIdConfigured: Boolean(clientId)
     }
 }
 
@@ -302,8 +339,9 @@ export function disconnectBackup(): void {
     const db = getDb()
     setSetting(db, SETTING_KEYS.gdriveEmail, '')
     setSetting(db, SETTING_KEYS.gdriveFolderId, '')
+    setSetting(db, SETTING_KEYS.gdriveLocalFolder, '')
     setSetting(db, SETTING_KEYS.gdriveLastBackupAt, 0)
-    logger.info('[backup] Google Drive diputus.')
+    logger.info('[backup] Koneksi backup diputus / dibersihkan.')
 }
 
 // ---------------------------------------------------------------------------
@@ -311,47 +349,102 @@ export function disconnectBackup(): void {
 // -----------------------------------------------------------------------
 
 export async function runBackup(): Promise<BackupRunResult> {
+    const db = getDb()
     const token = loadToken()
-    if (!token) {
-        throw new Error('Google Drive belum terhubung.')
+    const localFolder = getSetting<string>(db, SETTING_KEYS.gdriveLocalFolder, '')
+
+    if (!token && !localFolder) {
+        throw new Error(
+            'Google Drive belum terhubung. ' +
+            'Silakan pilih Folder Google Drive di komputer atau hubungkan akun Google Drive via OAuth.'
+        )
     }
 
     const start = Date.now()
-    const db = getDb()
     const trades = listTrades(db, {})
 
-    // Buat snapshot JSON semua trade.
+    // Snapshot JSON trade
     const snapshot = JSON.stringify({
         exportedAt: Date.now(),
         version: 1,
         trades
     }, null, 2)
 
-    // Folder backup: buat folder "Trading Journal Backup" di root Drive.
-    const folderId = await ensureBackupFolder(token.access_token)
+    let filesUploaded = 0
+    let bytesUploaded = 0
 
-    // Upload snapshot JSON.
-    const snapshotName = `trading-journal-${new Date().toISOString().slice(0, 10)}.json`
-    await uploadFile(token.access_token, folderId, snapshotName, snapshot, 'application/json')
+    // Mode A: Sinkron ke Folder Google Drive lokal (1-klik)
+    if (localFolder) {
+        if (!existsSync(localFolder)) {
+            mkdirSync(localFolder, { recursive: true })
+        }
 
-    let filesUploaded = 1
-    let bytesUploaded = Buffer.byteLength(snapshot, 'utf8')
+        const dateStr = new Date().toISOString().slice(0, 10)
+        const jsonPath = join(localFolder, `trading-journal-${dateStr}.json`)
+        writeFileSync(jsonPath, snapshot, 'utf8')
+        filesUploaded++
+        bytesUploaded += Buffer.byteLength(snapshot, 'utf8')
 
-    // Upload screenshot yang ada.
-    const screenshotDir = getScreenshotDir()
-    if (existsSync(screenshotDir)) {
-        const files = readdirSync(screenshotDir)
-        for (const fileName of files) {
-            const filePath = join(screenshotDir, fileName)
-            const stat = statSync(filePath)
-            const data = readFileSync(filePath)
-            await uploadFile(token.access_token, folderId, fileName, data, 'application/octet-stream')
+        // Backup database SQLite fisik jika ada
+        const dbPath = join(app.getPath('userData'), 'trades.db')
+        if (existsSync(dbPath)) {
+            const destDb = join(localFolder, 'trading-journal-database.db')
+            copyFileSync(dbPath, destDb)
+            const stat = statSync(destDb)
             filesUploaded++
             bytesUploaded += stat.size
         }
+
+        // Backup screenshot
+        const screenshotDir = getScreenshotDir()
+        if (existsSync(screenshotDir)) {
+            const destScreenshots = join(localFolder, 'screenshots')
+            if (!existsSync(destScreenshots)) mkdirSync(destScreenshots, { recursive: true })
+            const files = readdirSync(screenshotDir)
+            for (const file of files) {
+                const srcPath = join(screenshotDir, file)
+                const dstPath = join(destScreenshots, file)
+                copyFileSync(srcPath, dstPath)
+                const stat = statSync(srcPath)
+                filesUploaded++
+                bytesUploaded += stat.size
+            }
+        }
     }
 
-    setSetting(db, SETTING_KEYS.gdriveFolderId, folderId)
+    // Mode B: Upload ke Cloud Google Drive via token OAuth (jika ada)
+    if (token) {
+        try {
+            const folderId = await ensureBackupFolder(token.access_token)
+            const snapshotName = `trading-journal-${new Date().toISOString().slice(0, 10)}.json`
+            await uploadFile(token.access_token, folderId, snapshotName, snapshot, 'application/json')
+            filesUploaded++
+            bytesUploaded += Buffer.byteLength(snapshot, 'utf8')
+
+            const screenshotDir = getScreenshotDir()
+            if (existsSync(screenshotDir)) {
+                const files = readdirSync(screenshotDir)
+                for (const fileName of files) {
+                    const filePath = join(screenshotDir, fileName)
+                    const stat = statSync(filePath)
+                    const data = readFileSync(filePath)
+                    await uploadFile(token.access_token, folderId, fileName, data, 'application/octet-stream')
+                    filesUploaded++
+                    bytesUploaded += stat.size
+                }
+            }
+
+            setSetting(db, SETTING_KEYS.gdriveFolderId, folderId)
+        } catch (cloudErr) {
+            // Jika mode folder lokal sudah berhasil, catat warning daripada gagalkan seluruh backup
+            if (localFolder) {
+                logger.warn('[backup] Cloud upload gagal namun folder lokal sukses:', cloudErr)
+            } else {
+                throw cloudErr
+            }
+        }
+    }
+
     setSetting(db, SETTING_KEYS.gdriveLastBackupAt, Date.now())
 
     return {
@@ -361,6 +454,7 @@ export async function runBackup(): Promise<BackupRunResult> {
         durationMs: Date.now() - start
     }
 }
+
 
 async function ensureBackupFolder(accessToken: string): Promise<string> {
     // Cari folder "Trading Journal Backup" yang sudah ada.

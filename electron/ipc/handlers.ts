@@ -171,8 +171,15 @@ export function registerIpcHandlers(): void {
                     setSetting(db, SETTING_KEYS.aiModel, payload.aiModel)
                 if (payload.aiBaseUrl !== undefined)
                     setSetting(db, SETTING_KEYS.aiBaseUrl, payload.aiBaseUrl)
+                if (payload.gdriveClientId !== undefined)
+                    setSetting(db, SETTING_KEYS.gdriveClientId, payload.gdriveClientId)
+                if (payload.gdriveLocalFolder !== undefined)
+                    setSetting(db, SETTING_KEYS.gdriveLocalFolder, payload.gdriveLocalFolder)
+                if (payload.gdriveSyncMode !== undefined)
+                    setSetting(db, SETTING_KEYS.gdriveSyncMode, payload.gdriveSyncMode)
             })
     )
+
 
     // --- Ekspor (fitur 4) ----------------------------------------------------
 
@@ -252,7 +259,36 @@ export function registerIpcHandlers(): void {
         }
     })
 
+    ipcMain.handle(
+        IPC_CHANNELS.backupStartOAuth,
+        async (_event, clientId?: string): Promise<MutationResult<void>> => {
+            try {
+                const { startOAuthFlow } = await import('../backup/index')
+                await startOAuthFlow(clientId)
+                return { ok: true }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                return { ok: false, error: message }
+            }
+        }
+    )
+
+    ipcMain.handle(
+        IPC_CHANNELS.backupSelectFolder,
+        async (): Promise<MutationResult<string | null>> => {
+            try {
+                const { selectLocalFolder } = await import('../backup/index')
+                const folder = await selectLocalFolder()
+                return { ok: true, data: folder }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                return { ok: false, error: message }
+            }
+        }
+    )
+
     // --- AI Insights (fitur 6) ---
+
 
     ipcMain.handle(IPC_CHANNELS.aiConfigStatus, async (_event): Promise<AiConfigStatus> => {
         const { getAiConfig } = await import('../ai/index')

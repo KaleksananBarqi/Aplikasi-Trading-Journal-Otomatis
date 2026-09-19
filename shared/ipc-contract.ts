@@ -1,4 +1,5 @@
 import type {
+    AccountBalance,
     ChecklistItem,
     ExecutionGrade,
     ExchangeId,
@@ -45,6 +46,12 @@ export const IPC_CHANNELS = {
     backupStatus: 'backup:status',
     backupRun: 'backup:run',
     backupDisconnect: 'backup:disconnect',
+    backupStartOAuth: 'backup:startOAuth',
+    backupSelectFolder: 'backup:selectFolder',
+
+    // --- Saldo Exchange ---
+    balanceGet: 'balance:get',
+    balanceSync: 'balance:sync',
 
     // --- AI (fitur 6) ---
     analyzeJournal: 'journal:analyze',
@@ -68,6 +75,12 @@ export interface BackupStatusPayload {
     folder: string | null
     lastBackupAt: number | null
     nextBackupAt: number | null
+    /** Mode backup yang aktif: 'folder' (Google Drive desktop) atau 'oauth' (direct cloud). */
+    syncMode?: 'folder' | 'oauth'
+    /** Lokasi folder sinkronisasi lokal Google Drive (jika ada). */
+    localFolder?: string | null
+    /** Apakah Client ID OAuth sudah terisi di konfigurasi. */
+    clientIdConfigured?: boolean
 }
 
 export interface BackupRunResult {
@@ -231,6 +244,12 @@ export interface SettingsPayload {
     aiModel?: string
     /** Base URL provider OpenAI-compatible (fitur 6). */
     aiBaseUrl?: string
+    /** Client ID Google Cloud OAuth (fitur 5). */
+    gdriveClientId?: string
+    /** Path folder lokal Google Drive (fitur 5). */
+    gdriveLocalFolder?: string
+    /** Mode sinkronisasi Google Drive: 'folder' | 'oauth' */
+    gdriveSyncMode?: 'folder' | 'oauth'
 }
 
 /** Payload upload screenshot (fitur 1). */
@@ -280,6 +299,10 @@ export interface PreloadApi {
     getSettings(): Promise<Record<string, unknown>>
     setSettings(payload: SettingsPayload): Promise<MutationResult<void>>
 
+    // --- Saldo Exchange ---
+    getBalances(): Promise<AccountBalance[]>
+    syncBalances(): Promise<MutationResult<AccountBalance[]>>
+
     // --- Ekspor (fitur 4) ---
     exportJournal(format: 'csv' | 'json' | 'pdf', filter?: TradeFilterPayload): Promise<MutationResult<string>>
 
@@ -287,6 +310,8 @@ export interface PreloadApi {
     getBackupStatus(): Promise<BackupStatusPayload>
     runBackup(): Promise<MutationResult<BackupRunResult>>
     disconnectBackup(): Promise<MutationResult<void>>
+    startBackupOAuth(clientId?: string): Promise<MutationResult<void>>
+    selectBackupFolder(): Promise<MutationResult<string | null>>
 
     // --- Screenshot (fitur 1) ---
     uploadScreenshot(payload: ScreenshotUploadPayload): Promise<MutationResult<string>>
@@ -318,4 +343,5 @@ export interface PreloadApi {
 
 // Re-export tipe domain yang dipakai renderer, supaya renderer cukup
 // meng-import dari satu tempat.
-export type { ChecklistItem, ExecutionGrade, ExchangeId, TradeDetail, PnlSource }
+export type { AccountBalance, ChecklistItem, ExecutionGrade, ExchangeId, TradeDetail, PnlSource }
+

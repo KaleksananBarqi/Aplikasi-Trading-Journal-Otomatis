@@ -211,3 +211,75 @@ export function ErrorNote({ message }: { message: string }): React.JSX.Element {
         </div>
     )
 }
+
+/** Komponen Modal / Dialog overlay modern */
+export function Modal({
+    isOpen,
+    onClose,
+    title,
+    description,
+    children,
+    footer,
+    size = 'md'
+}: {
+    isOpen: boolean
+    onClose: () => void
+    title: string
+    description?: string
+    children: ReactNode
+    footer?: ReactNode
+    size?: 'sm' | 'md' | 'lg' | 'xl'
+}): React.JSX.Element | null {
+    if (!isOpen) return null
+
+    const maxWidthClass = {
+        sm: 'max-w-md',
+        md: 'max-w-xl',
+        lg: 'max-w-3xl',
+        xl: 'max-w-5xl'
+    }[size]
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+                className="fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
+                onClick={onClose}
+                aria-hidden="true"
+            />
+
+            {/* Modal Dialog Box */}
+            <div
+                className={cn(
+                    'relative z-50 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl animate-in fade-in-0 zoom-in-95',
+                    maxWidthClass
+                )}
+            >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-border px-6 py-4">
+                    <div>
+                        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+                        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 overflow-y-auto p-6">{children}</div>
+
+                {/* Modal Footer */}
+                {footer && (
+                    <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 px-6 py-3">
+                        {footer}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}

@@ -22,7 +22,8 @@ import {
     type TradeMeta,
     type TradeSavePayload
 } from '../shared/ipc-contract'
-import type { TradeDetail } from '../shared/domain'
+import type { AccountBalance, TradeDetail } from '../shared/domain'
+
 
 /**
  * Jembatan IPC renderer <-> main process.
@@ -76,6 +77,12 @@ const api: PreloadApi = {
     setSettings: (payload: SettingsPayload): Promise<MutationResult<void>> =>
         ipcRenderer.invoke(IPC_CHANNELS.settingsSet, payload),
 
+    // --- Saldo Exchange ---
+    getBalances: async (): Promise<AccountBalance[]> =>
+        unwrap<AccountBalance[]>(await ipcRenderer.invoke(IPC_CHANNELS.balanceGet)),
+    syncBalances: (): Promise<MutationResult<AccountBalance[]>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.balanceSync),
+
     // --- Ekspor (fitur 4) ---
     exportJournal: (format: 'csv' | 'json' | 'pdf', filter?: TradeFilterPayload) =>
         ipcRenderer.invoke(IPC_CHANNELS.exportJournal, format, filter),
@@ -87,6 +94,11 @@ const api: PreloadApi = {
         ipcRenderer.invoke(IPC_CHANNELS.backupRun),
     disconnectBackup: (): Promise<MutationResult<void>> =>
         ipcRenderer.invoke(IPC_CHANNELS.backupDisconnect),
+    startBackupOAuth: (clientId?: string): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.backupStartOAuth, clientId),
+    selectBackupFolder: (): Promise<MutationResult<string | null>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.backupSelectFolder),
+
 
     // --- Screenshot (fitur 1) ---
     uploadScreenshot: (payload: ScreenshotUploadPayload): Promise<MutationResult<string>> =>

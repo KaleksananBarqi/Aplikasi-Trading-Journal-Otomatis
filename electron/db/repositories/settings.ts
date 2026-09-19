@@ -81,8 +81,15 @@ export const SETTING_KEYS = {
     /** Epoch ms backup terakhir. */
     gdriveLastBackupAt: 'gdrive_last_backup_at',
     /** Base URL provider OpenAI-compatible (opsional, default api.openai.com). */
-    aiBaseUrl: 'ai_base_url'
+    aiBaseUrl: 'ai_base_url',
+    /** Client ID Google Cloud OAuth (fitur 5). */
+    gdriveClientId: 'gdrive_client_id',
+    /** Path folder lokal Google Drive Desktop (fitur 5). */
+    gdriveLocalFolder: 'gdrive_local_folder',
+    /** Mode sinkronisasi Google Drive ('folder' | 'oauth'). */
+    gdriveSyncMode: 'gdrive_sync_mode'
 } as const
+
 
 export interface SessionBounds {
     startUtcMinutes: number

@@ -15,6 +15,7 @@ import {
 } from '../lib/format'
 import { tableCellClass, tableClass, tableHeadCellClass, tableHeadClass, tableRowClass } from '../lib/ui'
 import { cn } from '../lib/utils'
+import { SharePnlModal } from '../components/SharePnlModal'
 
 /**
  * Trade Log — tabel data-dense.
@@ -52,7 +53,7 @@ const COLUMNS: Column[] = [
     { key: 'executionGrade', label: 'Grade', sortable: true, width: 70 },
     { key: 'rMultiple', label: 'R', sortable: true, align: 'right', width: 80 },
     { key: 'realizedPnl', label: 'P&L', sortable: true, align: 'right', width: 120 },
-    { key: 'actions', label: '', sortable: false, width: 90 }
+    { key: 'actions', label: '', sortable: false, width: 160 }
 ]
 
 function getSortValue(detail: TradeDetail, key: SortKey): number | string {
@@ -105,6 +106,7 @@ export function TradeLog({
 }: TradeLogProps): React.JSX.Element {
     const [sortKey, setSortKey] = useState<SortKey>('exitTime')
     const [sortDir, setSortDir] = useState<SortDirection>('desc')
+    const [sharePnlDetail, setSharePnlDetail] = useState<TradeDetail | null>(null)
 
     const sorted = useMemo(() => {
         const copy = [...trades]
@@ -300,7 +302,15 @@ export function TradeLog({
                                             />
                                         </td>
                                         <td className={tableCellClass('text-right')}>
-                                            <div className="flex justify-end gap-1">
+                                            <div className="flex justify-end items-center gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="h-7 px-2 text-[11px] text-primary hover:bg-primary/10"
+                                                    onClick={() => setSharePnlDetail(detail)}
+                                                >
+                                                    ✨ Pamer
+                                                </Button>
                                                 <Button size="sm" variant="ghost" onClick={() => onEdit(detail)}>
                                                     Edit
                                                 </Button>
@@ -352,6 +362,15 @@ export function TradeLog({
                         </span>
                     </div>
                 </footer>
+            )}
+
+            {/* Modal Pamer PnL Per Trade */}
+            {sharePnlDetail && (
+                <SharePnlModal
+                    isOpen={Boolean(sharePnlDetail)}
+                    onClose={() => setSharePnlDetail(null)}
+                    detail={sharePnlDetail}
+                />
             )}
         </div>
     )

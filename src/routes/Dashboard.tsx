@@ -1,9 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { TradeDetail } from '@shared/domain'
 import { PageHeader } from '../components/AppShell'
 import { MetricCard } from '../components/MetricCard'
-import { Badge, EmptyState } from '../components/ui'
+import { Badge, Button, EmptyState } from '../components/ui'
 import { PnlValue } from '../components/PnlValue'
+import { AccountBalanceWidget } from '../components/AccountBalanceWidget'
+import { ShareAnalyticsModal } from '../components/ShareAnalyticsModal'
+import { SharePnlModal } from '../components/SharePnlModal'
 import {
     buildEquityCurve,
     computeDrawdown,
@@ -89,6 +92,9 @@ interface DashboardProps {
 }
 
 export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Element {
+    const [shareAnalyticsOpen, setShareAnalyticsOpen] = useState(false)
+    const [sharePnlDetail, setSharePnlDetail] = useState<TradeDetail | null>(null)
+
     const summary = useMemo(() => summarize(trades), [trades])
     const curve = useMemo(() => buildEquityCurve(trades), [trades])
     const drawdown = useMemo(() => computeDrawdown(curve), [curve])
@@ -102,6 +108,9 @@ export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Elemen
         return (
             <div className="flex h-full flex-col overflow-hidden">
                 <PageHeader title="Dashboard" description="Ringkasan performa trading" />
+                <div className="px-6 pt-4">
+                    <AccountBalanceWidget hidePnl={hidePnl} />
+                </div>
                 <EmptyState
                     title="Belum ada data"
                     description="Dashboard akan menampilkan metrik performa setelah ada trade tercatat. Tambahkan trade manual lewat Trade Log, atau hubungkan API key exchange di Settings."
@@ -115,9 +124,23 @@ export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Elemen
             <PageHeader
                 title="Dashboard"
                 description={`Berdasarkan ${summary.totalTrades} trade · P&L bersih setelah fee & funding`}
+                actions={
+                    <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => setShareAnalyticsOpen(true)}
+                    >
+                        📊 Pamer Analytics
+                    </Button>
+                }
             />
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
+                {/* Widget Saldo Real-Time dari Exchange */}
+                <div className="mb-4">
+                    <AccountBalanceWidget hidePnl={hidePnl} />
+                </div>
+
                 {/* Headline metrics (brief §6) */}
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <MetricCard
@@ -242,7 +265,7 @@ export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Elemen
                                         </Badge>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3">
                                     <span className="tabular text-muted-foreground">
                                         {formatDateTime(detail.trade.exitTime)}
                                     </span>
@@ -256,6 +279,14 @@ export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Elemen
                                         hide={hidePnl}
                                         className={cn('w-24 text-right font-medium', pnlColorClass(detail.trade.realizedPnl))}
                                     />
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 px-2 text-[11px] text-primary hover:bg-primary/10"
+                                        onClick={() => setSharePnlDetail(detail)}
+                                    >
+                                        ✨ Pamer
+                                    </Button>
                                 </div>
                             </div>
                         ))}
@@ -269,6 +300,22 @@ export function Dashboard({ trades, hidePnl }: DashboardProps): React.JSX.Elemen
                     di halaman Analytics pada Fase 4.
                 </p>
             </div>
+
+            {/* Modal Pamer Full Analytics */}
+            <ShareAnalyticsModal
+                isOpen={shareAnalyticsOpen}
+                onClose={() => setShareAnalyticsOpen(false)}
+                trades={trades}
+            />
+
+            {/* Modal Pamer PnL Per Trade */}
+            {sharePnlDetail && (
+                <SharePnlModal
+                    isOpen={Boolean(sharePnlDetail)}
+                    onClose={() => setSharePnlDetail(null)}
+                    detail={sharePnlDetail}
+                />
+            )}
         </div>
     )
 }

@@ -9,6 +9,7 @@ import { EquityChart } from '../components/charts/EquityChart'
 import { GradeScatter } from '../components/charts/GradeScatter'
 import { RHistogram } from '../components/charts/RHistogram'
 import { Badge, Button, EmptyState, Select } from '../components/ui'
+import { ShareAnalyticsModal } from '../components/ShareAnalyticsModal'
 import {
     buildBreakdown,
     collectFilterValues,
@@ -55,6 +56,7 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
     const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
     const [dimension, setDimension] = useState<Dimension>('setupTag')
     const [equityVariant, setEquityVariant] = useState<'equity' | 'drawdown'>('equity')
+    const [shareAnalyticsOpen, setShareAnalyticsOpen] = useState(false)
 
     const options = useMemo(() => collectFilterValues(trades), [trades])
 
@@ -100,11 +102,20 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
                 title="Analytics"
                 description={`${filtered.length} dari ${trades.length} trade dianalisis`}
                 actions={
-                    activeFilterCount > 0 ? (
-                        <Button size="sm" variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
-                            Reset filter ({activeFilterCount})
+                    <div className="flex items-center gap-2">
+                        {activeFilterCount > 0 && (
+                            <Button size="sm" variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
+                                Reset filter ({activeFilterCount})
+                            </Button>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => setShareAnalyticsOpen(true)}
+                        >
+                            📊 Pamer Analytics
                         </Button>
-                    ) : undefined
+                    </div>
                 }
             />
 
@@ -493,6 +504,13 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
                     </>
                 )}
             </div>
+
+            {/* Modal Pamer Full Analytics */}
+            <ShareAnalyticsModal
+                isOpen={shareAnalyticsOpen}
+                onClose={() => setShareAnalyticsOpen(false)}
+                trades={filtered}
+            />
         </div>
     )
 }

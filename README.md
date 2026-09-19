@@ -12,7 +12,7 @@ Bukan web app, bukan SaaS, bukan trading bot. **Tidak ada kemampuan eksekusi ord
 
 | Aspek | Nilai |
 |---|---|
-| Versi | 1.1.0 |
+| Versi | 1.2.0 |
 | Platform | Electron + React 19 + TypeScript + Vite 7 |
 | Database | SQLite lokal (`better-sqlite3`, prebuilt N-API) |
 | Styling | Tailwind v4 (plugin Vite, bukan PostCSS) |
@@ -70,9 +70,10 @@ Hasil terakhir: **semua lulus**. Lihat [`plans/SESSION.md`](plans/SESSION.md:1) 
 
 ## Fitur
 
-### Sinkronisasi (read-only)
-- **MEXC** — posisi tertutup, fills, funding fee. Backfill penuh saat sync pertama, incremental setelahnya.
-- **Bitunix** — posisi tertutup & order historis. Funding fee **tidak tersedia** (lihat Keterbatasan).
+### Sinkronisasi Saldo & Riwayat (read-only)
+- **MEXC** — posisi tertutup, fills, funding fee, dan **saldo akun futures real-time** via CCXT swap balance. Backfill penuh saat sync pertama, incremental setelahnya.
+- **Bitunix** — posisi tertutup, order historis, dan **saldo akun futures real-time** via REST `/api/v1/futures/account`. Funding fee **tidak tersedia** (lihat Keterbatasan).
+- **Widget Saldo di Dashboard** — menampilkan Total Ekuitas Akun, Free Margin, Floating PnL, chip rincian per exchange, serta tombol perbarui saldo instan.
 - Idempotent: sync berulang **tidak** menciptakan duplikat.
 - Tombol Sync Now tersedia di sidebar (dari halaman mana pun) dan di Settings.
 - Auto-sync **default OFF** — tidak pernah memanggil API tanpa Anda minta.
@@ -82,6 +83,21 @@ Hasil terakhir: **semua lulus**. Lihat [`plans/SESSION.md`](plans/SESSION.md:1) 
 - **`execution_grade` (A/B/C/D) terpisah dari profit/loss.** Eksekusi bagus bisa rugi; eksekusi
   buruk bisa untung. Menggabungkannya akan membuat Anda salah belajar dari data sendiri.
 - Jurnal **tidak pernah** disentuh sync engine — catatan subjektif Anda aman dari tertimpa.
+
+### Generator Kartu Pamer PnL + Tesis Tiap Trade
+- Buat kartu pamer performa estetik beresolusi tinggi (Retina 2x) berbasis HTML5 Canvas native.
+- **5 Pilihan Tema Visual**: *Cyberpunk Neon*, *Obsidian Gold*, *Emerald Mint*, *Sunset Synth*, dan *Minimal Dark*.
+- **3 Aspek Rasio**: `1:1` (Square untuk Instagram/Telegram Feed), `9:16` (Story/TikTok/Reels), dan `16:9` (Twitter/X Header).
+- **Tesis & Review Live**: Catatan tesis pre-trade dan review post-trade otomatis diambil dan dapat disunting langsung di preview modal.
+- **Logo Exchange Opsional**: Bisa memasang logo MEXC, Bitunix, Binance, Bybit, atau mode polos tanpa logo.
+- **Ekspor 1-Klik**: Salin gambar langsung ke clipboard (bisa langsung Ctrl+V di chat/medsos) atau unduh file PNG.
+- Tombol **✨ Pamer** tersedia langsung di tabel Trade Log, daftar Journal Entry, dan card Trade Terakhir di Dashboard.
+
+### Generator Kartu Pamer Full Analytics
+- Kartu visual komprehensif merangkum seluruh metrik kunci: Net PnL, Win Rate %, Visual Win/Loss Bar, Profit Factor, Expectancy, Total Trades, dan Max Drawdown.
+- **Mini Kurva Equity Glowing**: Visualisasi grafik pertumbuhan modal neon dengan area gradient.
+- **Mode Privasi**: Sembunyikan nominal dolar ($) untuk pamer rasio, win rate, dan ROI persentase tanpa mengekspos modal riil Anda.
+- Tombol pintas **📊 Pamer Analytics** disematkan di header halaman Dashboard dan Analytics.
 
 ### Screenshot
 - Unggah screenshot langsung ke trade dari Trade Editor.
@@ -118,13 +134,15 @@ Hasil terakhir: **semua lulus**. Lihat [`plans/SESSION.md`](plans/SESSION.md:1) 
 - File disimpan lewat `dialog.showSaveDialog()` — tidak ada penulisan diam-diam.
 - Filter aktif diterapkan ke hasil ekspor.
 
-### Backup Google Drive
-- OAuth 2.0 PKCE dengan loopback redirect (`http://localhost:PORT`).
-- Token disimpan via `safeStorage` — tidak ada `client_secret` (desktop app flow).
-- Backup **satu arah**: snapshot JSON semua trade + screenshot diunggah ke folder
-  "Trading Journal Backup" di Drive Anda.
-- Tidak ada restore otomatis — bisa menimpa data finansial tanpa konfirmasi.
-- Set environment variable `GDRIVE_CLIENT_ID` dengan Client ID Google Cloud Console Anda.
+### Backup Google Drive (Dual-Mode)
+- **Mode 1 (Folder Lokal Google Drive — Rekomendasi/1-Klik)**:
+  - Cukup pilih folder Google Drive di komputer Anda (misal `G:\My Drive\TradingBackup`).
+  - Snapshot JSON semua trade dan lampiran screenshot otomatis disalin ke folder tersebut, dan disinkronkan langsung ke cloud oleh aplikasi Google Drive for Desktop. **Tanpa perlu konfigurasi API key atau GCP Client ID sama sekali.**
+- **Mode 2 (Cloud OAuth Direct)**:
+  - Form input Google OAuth Client ID terintegrasi langsung di UI Settings tanpa perlu mengedit file `.env` manual.
+  - Alur login OAuth 2.0 PKCE dengan loopback redirect (`http://localhost:PORT`).
+  - Token disimpan aman via `safeStorage` OS.
+- Backup **satu arah**: aman dari risiko tertimpa data finansial.
 
 ### Wawasan AI (opsional)
 - Analisa otomatis pola kelemahan dan saran perbaikan dari data journal.

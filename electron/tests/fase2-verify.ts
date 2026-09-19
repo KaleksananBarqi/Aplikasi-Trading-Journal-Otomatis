@@ -307,7 +307,7 @@ async function main(): Promise<void> {
         // --- Bagian 2: setup DB ---
         const migration = initializeDb(dbPath)
         check('Migrasi 002 ikut diterapkan', migration.applied.includes(2), `applied=[${migration.applied.join(',')}]`)
-        check('Schema version = 2', migration.currentVersion === 2, `version=${migration.currentVersion}`)
+        check('Schema version >= 2', migration.currentVersion >= 2, `version=${migration.currentVersion}`)
 
         const db = openDb(dbPath)
 

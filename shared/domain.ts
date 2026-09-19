@@ -15,6 +15,19 @@ export type TradeDirection = 'long' | 'short'
 export type MarginMode = 'isolated' | 'cross'
 
 /**
+ * Saldo akun exchange futures (misal USDT).
+ */
+export interface AccountBalance {
+    exchange: ExchangeId
+    asset: string
+    total: number
+    available: number
+    unrealizedPnl: number
+    updatedAt: number
+}
+
+
+/**
  * Asal nilai `realizedPnl` — keputusan D3 (plans/01-ARCHITECTURE.md).
  * Disimpan eksplisit supaya keandalan tiap baris bisa diaudit, bukan diasumsikan seragam.
  */

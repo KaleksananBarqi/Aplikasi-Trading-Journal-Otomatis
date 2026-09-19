@@ -7,7 +7,9 @@ import type {
     RawFundingFee,
     SyncCursor
 } from '../types'
+import type { AccountBalance } from '../../../shared/domain'
 import { withRetry } from '../types'
+
 import { BitunixClient, type BitunixPagedData } from './client'
 import { mapClosedPosition, mapFill, mapFundingFee } from './mapper'
 
@@ -205,7 +207,98 @@ export class BitunixAdapter implements ExchangeAdapter {
         // Status sync tetap `ok`, dan keterbatasan ini dinyatakan di UI Settings.
         return []
     }
+
+    /**
+     * Ambil saldo akun futures Bitunix (USDT).
+     * Endpoint resmi: /api/v1/futures/account
+     */
+    async fetchBalances(options: FetchOptions = {}): Promise<AccountBalance[]> {
+        return withRetry(
+            async () => {
+                if (options.signal?.aborted) throw new Error('Dibatalkan')
+
+                let data: unknown
+                try {
+                    data = await this.client.get<unknown>(
+                        '/api/v1/futures/account',
+                        {},
+                        options.signal
+                    )
+                } catch {
+                    // Fallback alternatif endpoint akun futures
+                    try {
+                        data = await this.client.get<unknown>(
+                            '/api/v1/futures/account/get_account',
+                            {},
+                            options.signal
+                        )
+                    } catch {
+                        data = null
+                    }
+                }
+
+                const now = Date.now()
+                const result: AccountBalance[] = []
+
+                if (data && typeof data === 'object') {
+                    const obj = data as Record<string, unknown>
+                    // Kasus 1: data adalah objek akun tunggal (USDT)
+                    const total = Number(obj.marginBalance ?? obj.equity ?? obj.totalBalance ?? obj.balance ?? 0)
+                    const available = Number(obj.availableBalance ?? obj.free ?? obj.available ?? total)
+                    const unrealizedPnl = Number(obj.unrealizedProfitLoss ?? obj.unrealizedPnl ?? obj.upl ?? 0)
+                    const asset = String(obj.asset ?? obj.currency ?? 'USDT')
+
+                    if (Number.isFinite(total)) {
+                        result.push({
+                            exchange: 'bitunix',
+                            asset,
+                            total,
+                            available,
+                            unrealizedPnl,
+                            updatedAt: now
+                        })
+                    }
+
+                    // Kasus 2: data memiliki list aset di dalamnya
+                    const list = extractList(data)
+                    for (const item of list) {
+                        const itemAsset = String(item.asset ?? item.currency ?? item.coin ?? 'USDT')
+                        const itemTotal = Number(item.marginBalance ?? item.equity ?? item.totalBalance ?? item.balance ?? 0)
+                        const itemAvailable = Number(item.availableBalance ?? item.free ?? item.available ?? itemTotal)
+                        const itemUnrealized = Number(item.unrealizedProfitLoss ?? item.unrealizedPnl ?? 0)
+
+                        if (!result.some((r) => r.asset === itemAsset)) {
+                            result.push({
+                                exchange: 'bitunix',
+                                asset: itemAsset,
+                                total: itemTotal,
+                                available: itemAvailable,
+                                unrealizedPnl: itemUnrealized,
+                                updatedAt: now
+                            })
+                        }
+                    }
+                }
+
+                if (result.length === 0) {
+                    result.push({
+                        exchange: 'bitunix',
+                        asset: 'USDT',
+                        total: 0,
+                        available: 0,
+                        unrealizedPnl: 0,
+                        updatedAt: now
+                    })
+                }
+
+                return result
+            },
+            'bitunix',
+            { signal: options.signal, onRetry: logRetry }
+        )
+    }
 }
+
 
 /** Log percobaan ulang, supaya backoff terlihat saat diagnosis. */
 function logRetry(attempt: number, delay: number, error: Error): void {

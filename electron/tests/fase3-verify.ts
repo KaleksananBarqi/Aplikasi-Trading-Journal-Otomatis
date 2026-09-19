@@ -388,7 +388,7 @@ async function main(): Promise<void> {
         results.push('--- Adapter Bitunix lewat engine Fase 2 (tanpa perubahan) ---')
 
         const migration = initializeDb(dbPath)
-        check('DB siap (schema v2)', migration.currentVersion === 2)
+        check('DB siap (schema >= 2)', migration.currentVersion >= 2)
         const db = openDb(dbPath)
 
         // --- GATE: Bitunix lewat syncExchange yang sama dengan MEXC ---

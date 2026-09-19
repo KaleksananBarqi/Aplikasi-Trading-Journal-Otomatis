@@ -11,6 +11,8 @@ import {
     upsertPositions,
     type UpsertResult
 } from '../db/repositories/sync'
+import { upsertBalances } from '../db/repositories/balance'
+
 
 /**
  * Sync engine — orkestrator.
@@ -203,7 +205,18 @@ export async function syncExchange(
         console.warn(`[sync:${exchange}]`, message)
     }
 
+    // --- Tahap 5: Saldo akun (ekstensi) --------------------------------------
+    if (typeof adapter.fetchBalances === 'function') {
+        try {
+            const balances = await adapter.fetchBalances({ signal: options.signal })
+            upsertBalances(db, balances)
+        } catch (error) {
+            console.warn(`[sync:${exchange}] Saldo gagal diperbarui:`, error)
+        }
+    }
+
     const finalStatus: SyncResult['status'] = partialError ? 'partial' : 'ok'
+
 
     updateSyncState(db, exchange, {
         lastSyncAt: Date.now(),

@@ -80,6 +80,8 @@ export interface FetchOptions {
     signal?: AbortSignal
 }
 
+import type { AccountBalance } from '../../shared/domain'
+
 export interface ExchangeAdapter {
     readonly id: SupportedExchange
     /** Nama tampilan untuk UI. */
@@ -97,7 +99,13 @@ export interface ExchangeAdapter {
     fetchFills(cursor: SyncCursor, options?: FetchOptions): Promise<RawFill[]>
 
     fetchFundingFees(cursor: SyncCursor, options?: FetchOptions): Promise<RawFundingFee[]>
+
+    /**
+     * Ambil saldo akun futures saat ini (misal USDT).
+     */
+    fetchBalances?(options?: FetchOptions): Promise<AccountBalance[]>
 }
+
 
 /** Error yang bisa dibedakan pemanggil — terutama untuk backoff vs abort. */
 export class ExchangeError extends Error {

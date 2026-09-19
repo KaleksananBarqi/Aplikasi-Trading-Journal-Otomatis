@@ -11,6 +11,9 @@ import {
 } from '../../shared/ipc-contract'
 import { getDb } from '../db/index'
 import { getSyncState } from '../db/repositories/sync'
+import { getAllBalances, upsertBalances } from '../db/repositories/balance'
+import type { AccountBalance } from '../../shared/domain'
+
 import {
     deleteCredentials,
     getAllStatuses,
@@ -220,4 +223,52 @@ export function registerSyncHandlers(getWindow: () => BrowserWindow | null): voi
             return { ok: false, error: message }
         }
     })
+
+    // --- Saldo Akun Exchange ------------------------------------------------
+    ipcMain.handle(IPC_CHANNELS.balanceGet, (): MutationResult<AccountBalance[]> => {
+        try {
+            const db = getDb()
+            const balances = getAllBalances(db)
+            return { ok: true, data: balances }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { ok: false, error: message }
+        }
+    })
+
+    ipcMain.handle(IPC_CHANNELS.balanceSync, async (): Promise<MutationResult<AccountBalance[]>> => {
+        try {
+            const { adapters, skipped } = buildAdapters()
+            if (adapters.length === 0) {
+                return {
+                    ok: false,
+                    error: skipped.length > 0
+                        ? `Belum ada kredensial exchange (${skipped.join(', ')}). Simpan API key terlebih dahulu.`
+                        : 'Tidak ada exchange terhubung.'
+                }
+            }
+
+            const db = getDb()
+            const allFetched: AccountBalance[] = []
+
+            for (const adapter of adapters) {
+                if (typeof adapter.fetchBalances === 'function') {
+                    try {
+                        const balances = await adapter.fetchBalances()
+                        upsertBalances(db, balances)
+                        allFetched.push(...balances)
+                    } catch (err) {
+                        logger.error(`[ipc:sync] Gagal ambil saldo ${adapter.id}:`, err)
+                    }
+                }
+            }
+
+            const current = getAllBalances(db)
+            return { ok: true, data: current }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { ok: false, error: message }
+        }
+    })
 }
+

@@ -7,7 +7,9 @@ import type {
     RawFundingFee,
     SyncCursor
 } from '../types'
+import type { AccountBalance } from '../../../shared/domain'
 import { ExchangeError, withRetry } from '../types'
+
 import { mapClosedPosition, mapFill, mapFundingFee } from './mapper'
 
 /**
@@ -210,7 +212,75 @@ export class MexcAdapter implements ExchangeAdapter {
 
         return collected
     }
+
+    /**
+     * Ambil saldo akun futures MEXC saat ini (USDT/USDC).
+     */
+    async fetchBalances(options: FetchOptions = {}): Promise<AccountBalance[]> {
+        const client = this.client as {
+            fetchBalance: (params?: Record<string, unknown>) => Promise<Record<string, unknown>>
+        }
+
+        const raw = await withRetry(
+            async () => {
+                if (options.signal?.aborted) throw new Error('Dibatalkan')
+                return await client.fetchBalance({ type: 'swap' })
+            },
+            'mexc',
+            { signal: options.signal, onRetry: logRetry }
+        )
+
+        const totalMap = (raw.total as Record<string, unknown>) ?? {}
+        const freeMap = (raw.free as Record<string, unknown>) ?? {}
+        const now = Date.now()
+        const result: AccountBalance[] = []
+
+        // Prioritaskan USDT jika ada, atau aset lain yang bernilai > 0
+        const assets = Object.keys(totalMap).filter((asset) => {
+            const val = Number(totalMap[asset])
+            return Number.isFinite(val) && (val > 0 || asset === 'USDT')
+        })
+
+        for (const asset of assets) {
+            const total = Number(totalMap[asset]) || 0
+            const available = Number(freeMap[asset]) || 0
+            // Cari unrealized PnL dari info jika disediakan ccxt
+            let unrealizedPnl = 0
+            if (raw.info && typeof raw.info === 'object') {
+                const info = raw.info as Record<string, unknown>
+                const dataList = Array.isArray(info.data) ? info.data : []
+                const found = dataList.find((item: Record<string, unknown>) => item.currency === asset)
+                if (found && found.unrealisedPnl !== undefined) {
+                    unrealizedPnl = Number(found.unrealisedPnl) || 0
+                }
+            }
+
+            result.push({
+                exchange: 'mexc',
+                asset,
+                total,
+                available,
+                unrealizedPnl,
+                updatedAt: now
+            })
+        }
+
+        // Jika result kosong (misal saldo baru 0), sediakan entri USDT default
+        if (result.length === 0) {
+            result.push({
+                exchange: 'mexc',
+                asset: 'USDT',
+                total: 0,
+                available: 0,
+                unrealizedPnl: 0,
+                updatedAt: now
+            })
+        }
+
+        return result
+    }
 }
+
 
 /** Log percobaan ulang, supaya backoff terlihat saat diagnosis. */
 function logRetry(attempt: number, delay: number, error: ExchangeError): void {

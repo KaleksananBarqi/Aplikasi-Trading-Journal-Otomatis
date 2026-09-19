@@ -8,6 +8,7 @@ release/
 
 # Data lokal aplikasi — DB SQLite & screenshot TIDAK boleh masuk repo
 data/
+screenshots/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
@@ -34,3 +35,12 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+#plans
+.session.md
+.gemini.md
+.PLAN_HISTORY.md
+.PLAN.md
+.docs/
+.docs/*
+SESSION.md
