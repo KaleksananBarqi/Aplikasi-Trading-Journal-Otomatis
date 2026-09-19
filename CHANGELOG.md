@@ -5,6 +5,27 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [1.2.1] - 2026-09-20
+
+### 🚀 Fitur Baru & Peningkatan Branding Share PnL
+- **Kustomisasi Logo Exchange & Kode Referral per Exchange**:
+  - Dukungan unggah logo kustom (PNG transparan disarankan, JPG, SVG, WebP) terpisah untuk masing-masing exchange (**MEXC** & **Bitunix**).
+  - Slot input kode referral khusus untuk MEXC dan Bitunix di menu Settings.
+  - Tampilan badge `Ref: [KODE]` beraksen biru langit (`#38bdf8`) presisi di bawah logo exchange pada kartu pamer PnL, baik di HTML live preview maupun Canvas export HQ (1080px).
+  - Kalkulasi tinggi header Canvas dinamis (`headerH`) otomatis menyesuaikan saat kode referral aktif untuk memastikan tidak ada tabrakan layout dengan teks Symbol / Direction.
+- **Kustomisasi Judul Brand Utama & Sub-label Badge**:
+  - Pengguna bebas mengatur teks brand utama (default: `"SHARENYA"`) dan sub-label badge (default: `"JOURNAL"`) langsung dari Pengaturan.
+  - Pengukuran lebar teks dinamis (`ctx.measureText`) pada Canvas menjamin badge sub-label bergeser secara rapi dan proporsional mengikuti panjang judul brand.
+- **Penyederhanaan Pilihan Exchange (Fokus MEXC & Bitunix)**:
+  - Opsi exchange dikunci secara ketat hanya untuk MEXC dan Bitunix sesuai kapabilitas sinkronisasi saat ini.
+- **Kustomisasi Avatar, Wallpaper Transparan/Kustom & Teks Adaptif**:
+  - Pengaturan avatar trader dan handle tersimpan terpusat di Settings.
+  - Fitur unggah custom image background dengan slider peredupan (*dimming overlay* 0-100%).
+  - Pilihan tema estetik termasuk *Glass Transparan* beraksen neon cyan/pink.
+  - Opsi adaptif untuk menampilkan teks tesis dan review secara penuh tanpa terpotong (Auto-Flow Y Canvas).
+
+---
+
 ## [1.2.0] - 2026-09-19
 
 ### 🚀 Fitur Baru

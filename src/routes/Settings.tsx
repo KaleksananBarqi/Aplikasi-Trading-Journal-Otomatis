@@ -4,6 +4,7 @@ import { AiConfigPanel } from '../components/AiConfigPanel'
 import { BackupPanel } from '../components/BackupPanel'
 import { ExchangeCredentials } from '../components/ExchangeCredentials'
 import { SyncPanel } from '../components/SyncPanel'
+import { ShareBrandingSettings } from '../components/ShareBrandingSettings'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Select, TextArea } from '../components/ui'
 import type { Theme } from '../hooks/useTheme'
 import { cn } from '../lib/utils'
@@ -146,7 +147,7 @@ export function Settings({
                             </div>
                         </div>
                     </Card>
-
+                    <ShareBrandingSettings />
                     <Card>
                         <CardHeader
                             title="Template Checklist"
