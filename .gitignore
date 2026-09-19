@@ -8,7 +8,6 @@ release/
 
 # Data lokal aplikasi — DB SQLite & screenshot TIDAK boleh masuk repo
 data/
-screenshots/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
