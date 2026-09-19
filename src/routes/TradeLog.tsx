@@ -31,11 +31,10 @@ type SortKey =
     | 'rMultiple'
     | 'duration'
     | 'executionGrade'
-
 type SortDirection = 'asc' | 'desc'
 
 interface Column {
-    key: SortKey | 'setup' | 'actions'
+    key: SortKey | 'setup' | 'tags' | 'actions'
     label: string
     sortable: boolean
     align?: 'left' | 'right'
@@ -49,6 +48,7 @@ const COLUMNS: Column[] = [
     { key: 'direction', label: 'Arah', sortable: true, width: 70 },
     { key: 'duration', label: 'Durasi', sortable: true, align: 'right', width: 80 },
     { key: 'setup', label: 'Setup', sortable: false, width: 120 },
+    { key: 'tags', label: 'Tag', sortable: false, width: 140 },
     { key: 'executionGrade', label: 'Grade', sortable: true, width: 70 },
     { key: 'rMultiple', label: 'R', sortable: true, align: 'right', width: 80 },
     { key: 'realizedPnl', label: 'P&L', sortable: true, align: 'right', width: 120 },
@@ -90,6 +90,7 @@ interface TradeLogProps {
     onDelete: (detail: TradeDetail) => void
     onCreate: () => void
     hidePnl: boolean
+    onExport: (format: 'csv' | 'json' | 'pdf') => void
 }
 
 export function TradeLog({
@@ -99,7 +100,8 @@ export function TradeLog({
     onEdit,
     onDelete,
     onCreate,
-    hidePnl
+    hidePnl,
+    onExport
 }: TradeLogProps): React.JSX.Element {
     const [sortKey, setSortKey] = useState<SortKey>('exitTime')
     const [sortDir, setSortDir] = useState<SortDirection>('desc')
@@ -147,9 +149,24 @@ export function TradeLog({
                 title="Trade Log"
                 description={`${trades.length} trade tercatat`}
                 actions={
-                    <Button variant="primary" onClick={onCreate}>
-                        + Trade Baru
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {trades.length > 0 && (
+                            <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => onExport('csv')}>
+                                    CSV
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => onExport('json')}>
+                                    JSON
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => onExport('pdf')}>
+                                    PDF
+                                </Button>
+                            </div>
+                        )}
+                        <Button variant="primary" onClick={onCreate}>
+                            + Trade Baru
+                        </Button>
+                    </div>
                 }
             />
 
@@ -213,6 +230,27 @@ export function TradeLog({
                                         <td className={tableCellClass('text-xs')}>
                                             {journal?.setupTag ? (
                                                 <span className="text-muted-foreground">{journal.setupTag}</span>
+                                            ) : (
+                                                <span className="text-muted-foreground/50">—</span>
+                                            )}
+                                        </td>
+                                        <td className={tableCellClass('text-xs')}>
+                                            {detail.tags.length > 0 ? (
+                                                <div className="flex flex-wrap gap-0.5">
+                                                    {detail.tags.slice(0, 3).map((tag) => (
+                                                        <span
+                                                            key={tag.id}
+                                                            className="rounded border border-primary/30 bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary"
+                                                        >
+                                                            {tag.name}
+                                                        </span>
+                                                    ))}
+                                                    {detail.tags.length > 3 && (
+                                                        <span className="text-[9px] text-muted-foreground">
+                                                            +{detail.tags.length - 3}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <span className="text-muted-foreground/50">—</span>
                                             )}
@@ -302,15 +340,6 @@ export function TradeLog({
                                     2
                                 )}
                             </span>
-                        </span>
-                        <span>
-                            Trade dengan R valid:{' '}
-                            <span className="tabular">
-                                {sorted.filter((d) => d.rMultiple !== null).length} / {sorted.length}
-                            </span>
-                        </span>
-                        <span className="text-muted-foreground/70">
-                            Harga entry terakhir: {sorted[0] ? formatPrice(sorted[0].trade.entryPrice) : '—'}
                         </span>
                         <span>
                             Trade dengan R valid:{' '}

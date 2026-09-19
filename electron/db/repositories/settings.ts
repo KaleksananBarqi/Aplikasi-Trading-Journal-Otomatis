@@ -71,7 +71,17 @@ export const SETTING_KEYS = {
     /** Template checklist default untuk trade baru. */
     checklistTemplate: 'checklist_template',
     /** Sembunyikan semua angka PnL (default false). */
-    hidePnl: 'hide_pnl'
+    hidePnl: 'hide_pnl',
+    /** Nama model OpenAI untuk fitur AI Insights (mis. 'gpt-4o'). */
+    aiModel: 'ai_model',
+    /** ID folder Google Drive untuk backup (dari flow OAuth). */
+    gdriveFolderId: 'gdrive_folder_id',
+    /** Email akun Google yang terhubung (untuk ditampilkan di UI). */
+    gdriveEmail: 'gdrive_email',
+    /** Epoch ms backup terakhir. */
+    gdriveLastBackupAt: 'gdrive_last_backup_at',
+    /** Base URL provider OpenAI-compatible (opsional, default api.openai.com). */
+    aiBaseUrl: 'ai_base_url'
 } as const
 
 export interface SessionBounds {

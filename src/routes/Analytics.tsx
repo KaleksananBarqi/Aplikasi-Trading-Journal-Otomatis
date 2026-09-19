@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { TradeDetail } from '@shared/domain'
 import { PageHeader } from '../components/AppShell'
+import { AiInsightsPanel } from '../components/AiInsightsPanel'
 import { MetricCard } from '../components/MetricCard'
 import { CalendarHeatmap } from '../components/charts/CalendarHeatmap'
 import { PnlValue } from '../components/PnlValue'
@@ -208,31 +209,9 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
                                         : `${summary.wins}W / ${summary.losses}L`
                                 }
                             />
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                             <MetricCard
                                 label="Profit Factor"
                                 value={<PnlValue value={formatRatio(summary.profitFactor)} hide={hidePnl} />}
-                                hint={
-                                    !Number.isFinite(summary.profitFactor)
-                                        ? 'Tanpa loss — tidak terhingga'
-                                        : 'Profit kotor ÷ loss kotor'
-                                }
-                                valueClassName={hidePnl ? undefined : 'text-profit'}
-                            />
-                            <MetricCard
-                                label="Expectancy"
-                                value={<PnlValue value={summary.expectancy === null ? '—' : formatPnl(summary.expectancy)} hide={hidePnl} className={summary.expectancy === null ? undefined : pnlColorClass(summary.expectancy)} />}
-                                hint="Rata-rata hasil per trade"
-                            />
-                            <MetricCard
-                                label="P&L Bersih"
-                                value={<PnlValue value={formatPnl(summary.netPnlTotal)} hide={hidePnl} className={pnlColorClass(summary.netPnlTotal)} />}
-                                hint={`Fee ${formatPnl(-summary.feeTotal)} · funding ${formatPnl(-summary.fundingFeeTotal)}`}
-                            />
-                            <MetricCard
-                                label="Profit Factor"
-                                value={formatRatio(summary.profitFactor)}
                                 hint={
                                     !Number.isFinite(summary.profitFactor)
                                         ? 'Tanpa loss — tidak terhingga'
@@ -246,17 +225,13 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
                             />
                             <MetricCard
                                 label="Expectancy"
-                                value={summary.expectancy === null ? '—' : formatPnl(summary.expectancy)}
+                                value={<PnlValue value={summary.expectancy === null ? '—' : formatPnl(summary.expectancy)} hide={hidePnl} className={summary.expectancy === null ? undefined : pnlColorClass(summary.expectancy)} />}
                                 hint="Rata-rata hasil per trade"
-                                valueClassName={
-                                    summary.expectancy === null ? undefined : pnlColorClass(summary.expectancy)
-                                }
                             />
                             <MetricCard
                                 label="P&L Bersih"
-                                value={formatPnl(summary.netPnlTotal)}
+                                value={<PnlValue value={formatPnl(summary.netPnlTotal)} hide={hidePnl} className={pnlColorClass(summary.netPnlTotal)} />}
                                 hint={`Fee ${formatPnl(-summary.feeTotal)} · funding ${formatPnl(-summary.fundingFeeTotal)}`}
-                                valueClassName={pnlColorClass(summary.netPnlTotal)}
                             />
                         </div>
 
@@ -504,6 +479,9 @@ export function Analytics({ trades, hidePnl }: AnalyticsProps): React.JSX.Elemen
                                 })}
                             </div>
                         </section>
+
+                        {/* --- AI Insights (fitur 6) --- */}
+                        <AiInsightsPanel trades={filtered} />
 
                         <p className="mt-4 text-[11px] text-muted-foreground">
                             Semua metrik di halaman ini memakai <span className="font-medium">P&L bersih</span>{' '}

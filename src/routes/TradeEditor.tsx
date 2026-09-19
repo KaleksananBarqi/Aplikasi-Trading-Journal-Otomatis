@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-    DEFAULT_EMOTION_TAGS,
+    computePlannedRR,
     computeRMultiple,
+    DEFAULT_EMOTION_TAGS,
+    normalizeTagName,
+    parseTags,
     type ExchangeId,
     type ExecutionGrade,
     type MarginMode,
@@ -18,13 +21,19 @@ import { fromDateTimeLocalInput, formatR, toDateTimeLocalInput } from '../lib/fo
  * Satu formulir untuk membuat dan mengedit, karena field-nya identik.
  *
  * PRINSIP PEMISAHAN (brief §5.3 & §12):
- * Field jurnal (setup, thesis, review, emosi, grade) disimpan di tabel yang
- * BERBEDA dari field P&L. Form ini menyatukan tampilannya untuk kenyamanan user,
- * tapi tidak pernah menggabungkan keduanya menjadi satu nilai/skor.
+ * Field jurnal (setup, thesis, review, emosi, grade, tags, screenshot) disimpan
+ * di tabel yang BERBEDA dari field P&L. Form ini menyatukan tampilannya untuk
+ * kenyamanan user, tapi tidak pernah menggabungkan keduanya menjadi satu nilai/skor.
  *
  * PRINSIP R-MULTIPLE (brief §5.2):
  * Kalau stop loss tidak diisi, R ditampilkan sebagai "—" dan tombol simpan tetap
  * aktif. R bukan field wajib, dan tidak diestimasi dari data yang tidak ada.
+ *
+ * FITUR 2 — RR RENCANA (plans/05-FEATURES-PLAN.md):
+ * RR rencana dihitung otomatis dari entry/SL/TP via `computePlannedRR()`.
+ * Tampilkan terpisah dari R-Multiple realisasi — keduanya punya arti berbeda:
+ * RR rencana = rasio risk:reward saat trade direncanakan.
+ * R-Multiple realisasi = hasil aktual relatif terhadap risiko yang diambil.
  */
 
 interface FormState {
@@ -53,6 +62,14 @@ interface FormState {
     plannedStop: number | null
     plannedTarget: number | null
     riskAmount: number | null
+
+    /** Input teks multi-tag (dipisah spasi/koma). */
+    tagsInput: string
+
+    /** Path screenshot relatif (dari main process). */
+    screenshotPath: string | null
+    /** Preview data URL (dari getScreenshot). */
+    screenshotPreview: string | null
 }
 
 function emptyForm(now: number, checklistTemplate: string[]): FormState {
@@ -83,12 +100,16 @@ function emptyForm(now: number, checklistTemplate: string[]): FormState {
 
         plannedStop: null,
         plannedTarget: null,
-        riskAmount: null
+        riskAmount: null,
+
+        tagsInput: '',
+        screenshotPath: null,
+        screenshotPreview: null
     }
 }
 
 function toFormState(detail: TradeDetail): FormState {
-    const { trade, journal, plannedRisk, checklist } = detail
+    const { trade, journal, plannedRisk, checklist, tags } = detail
     return {
         exchange: trade.exchange,
         symbol: trade.symbol,
@@ -116,7 +137,12 @@ function toFormState(detail: TradeDetail): FormState {
 
         plannedStop: plannedRisk?.plannedStop ?? null,
         plannedTarget: plannedRisk?.plannedTarget ?? null,
-        riskAmount: plannedRisk?.riskAmount ?? null
+        riskAmount: plannedRisk?.riskAmount ?? null,
+
+        // Tampilkan tag yang sudah ada sebagai string dipisah spasi.
+        tagsInput: tags.map((t) => t.name).join(' '),
+        screenshotPath: journal?.screenshotPath ?? null,
+        screenshotPreview: null
     }
 }
 
@@ -140,12 +166,30 @@ export function TradeEditor({
     )
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Muat ulang form saat trade yang diedit berubah.
     useEffect(() => {
         setForm(detail ? toFormState(detail) : emptyForm(Date.now(), checklistTemplate))
         setError(null)
     }, [detail, checklistTemplate])
+
+    // Fitur 1: Muat preview screenshot saat form punya screenshotPath.
+    useEffect(() => {
+        if (!form.screenshotPath) {
+            return
+        }
+        let cancelled = false
+        void window.api.getScreenshot(form.screenshotPath).then((result) => {
+            if (cancelled) return
+            if (result.ok && result.data) {
+                setForm((prev) => ({ ...prev, screenshotPreview: result.data ?? null }))
+            }
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [form.screenshotPath])
 
     const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
         setForm((prev) => ({ ...prev, [key]: value }))
@@ -166,6 +210,19 @@ export function TradeEditor({
         })
     }
 
+    // Fitur 2: RR rencana dihitung otomatis dari direction/entry/SL/TP.
+    const plannedRrPreview = useMemo((): number | null => {
+        if (form.entryPrice === null || form.plannedStop === null || form.plannedTarget === null) {
+            return null
+        }
+        return computePlannedRR(
+            form.direction,
+            form.entryPrice,
+            form.plannedStop,
+            form.plannedTarget
+        )
+    }, [form.direction, form.entryPrice, form.plannedStop, form.plannedTarget])
+
     const validation = useMemo((): string | null => {
         if (form.symbol.trim() === '') return 'Symbol wajib diisi.'
         if (form.entryPrice === null) return 'Harga entry wajib diisi.'
@@ -183,6 +240,49 @@ export function TradeEditor({
         return null
     }, [form])
 
+    // Fitur 1: Upload screenshot.
+    async function handleScreenshotSelect(event: React.ChangeEvent<HTMLInputElement>): Promise<void> {
+        const file = event.target.files?.[0]
+        if (!file) return
+        setError(null)
+        try {
+            const buffer = await file.arrayBuffer()
+            const result = await window.api.uploadScreenshot({
+                fileName: file.name,
+                data: new Uint8Array(buffer)
+            })
+            if (!result.ok || !result.data) {
+                setError(result.error ?? 'Gagal mengunggah screenshot.')
+                return
+            }
+            // Hapus screenshot lama jika ada.
+            const oldPath = form.screenshotPath
+            if (oldPath && oldPath !== result.data) {
+                // Tidak perlu hapus di sini — akan diganti saat save.
+            }
+            // Dapatkan preview data URL.
+            const previewResult = await window.api.getScreenshot(result.data)
+            setForm((prev) => ({
+                ...prev,
+                screenshotPath: result.data ?? null,
+                screenshotPreview: previewResult.ok ? previewResult.data ?? null : null
+            }))
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err))
+        } finally {
+            // Reset input supaya bisa pilih file yang sama lagi.
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+    }
+
+    function handleRemoveScreenshot(): void {
+        setForm((prev) => ({
+            ...prev,
+            screenshotPath: null,
+            screenshotPreview: null
+        }))
+    }
+
     async function handleSubmit(): Promise<void> {
         if (validation) {
             setError(validation)
@@ -192,6 +292,9 @@ export function TradeEditor({
         const entryTime = fromDateTimeLocalInput(form.entryTime)
         const exitTime = fromDateTimeLocalInput(form.exitTime)
         if (entryTime === null || exitTime === null) return
+
+        // Parse tag input menjadi array nama ternormalisasi.
+        const tags = parseTags(form.tagsInput)
 
         const payload: TradeSavePayload = {
             trade: {
@@ -217,12 +320,15 @@ export function TradeEditor({
                 postTradeReview: form.postTradeReview,
                 emotionTag: form.emotionTag,
                 executionGrade: form.executionGrade,
+                screenshotPath: form.screenshotPath,
+                tags,
                 checklist: form.checklist
             },
             plannedRisk: {
                 plannedStop: form.plannedStop,
                 plannedTarget: form.plannedTarget,
-                riskAmount: form.riskAmount
+                riskAmount: form.riskAmount,
+                plannedRr: plannedRrPreview
             }
         }
 
@@ -434,11 +540,21 @@ export function TradeEditor({
                                 <NumberInput value={form.riskAmount} onValueChange={(v) => update('riskAmount', v)} />
                             </Field>
                             <Field
-                                label="R-Multiple"
+                                label="RR Rencana"
+                                hint="Risk:Reward — dihitung dari entry/SL/TP"
+                            >
+                                <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
+                                    <span className="tabular text-sm">
+                                        {plannedRrPreview === null ? '—' : `1:${plannedRrPreview.toFixed(2)}`}
+                                    </span>
+                                </div>
+                            </Field>
+                            <Field
+                                label="R-Multiple Realisasi"
                                 hint={
                                     form.riskAmount === null
                                         ? 'Isi nominal risiko untuk menghitung R'
-                                        : 'Dihitung otomatis'
+                                        : 'Hasil aktual relatif terhadap risiko'
                                 }
                             >
                                 <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
@@ -501,6 +617,36 @@ export function TradeEditor({
                                 </Field>
                             </div>
 
+                            {/* --- Fitur 3: Tag kustom multi-nilai --- */}
+                            <Field
+                                label="Tag Kustom"
+                                hint="Pisahkan dengan spasi atau koma. Mis. BTC_Scalp SaldoReset"
+                            >
+                                <TextInput
+                                    value={form.tagsInput}
+                                    onChange={(e) => update('tagsInput', e.target.value)}
+                                    placeholder="mis. breakout high_vol"
+                                    list="tag-suggestions"
+                                />
+                                <datalist id="tag-suggestions">
+                                    {(meta?.tags ?? []).map((t) => (
+                                        <option key={t} value={t} />
+                                    ))}
+                                </datalist>
+                                {form.tagsInput.trim() !== '' && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                        {parseTags(form.tagsInput).map((tag) => (
+                                            <span
+                                                key={tag}
+                                                className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                                            >
+                                                #{normalizeTagName(tag)}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </Field>
+
                             <Field label="Tesis Pre-Trade">
                                 <TextArea
                                     value={form.preTradeThesis}
@@ -515,6 +661,44 @@ export function TradeEditor({
                                     onChange={(e) => update('postTradeReview', e.target.value)}
                                     placeholder="Apa yang berjalan baik? Apa yang perlu diperbaiki?"
                                 />
+                            </Field>
+
+                            {/* --- Fitur 1: Screenshot --- */}
+                            <Field label="Screenshot" hint="Lampirkan chart atau bukti eksekusi (maks 4 MB)">
+                                <div className="flex flex-col gap-2">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp,image/gif"
+                                        onChange={(e) => void handleScreenshotSelect(e)}
+                                        className="hidden"
+                                    />
+                                    {form.screenshotPreview ? (
+                                        <div className="relative w-fit">
+                                            <img
+                                                src={form.screenshotPreview}
+                                                alt="Screenshot"
+                                                className="max-h-48 rounded-md border border-border"
+                                            />
+                                            <Button
+                                                size="sm"
+                                                variant="danger"
+                                                className="absolute right-1 top-1 h-6 px-2 text-[10px]"
+                                                onClick={handleRemoveScreenshot}
+                                            >
+                                                Hapus
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            + Pilih Screenshot
+                                        </Button>
+                                    )}
+                                </div>
                             </Field>
 
                             <div>

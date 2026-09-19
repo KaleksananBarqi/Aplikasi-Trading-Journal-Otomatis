@@ -129,7 +129,15 @@ function makeTrade(spec: FixtureSpec): TradeDetail {
                 },
         // R dihitung sama seperti repository: P&L / nominal risiko.
         rMultiple: riskAmount === null || riskAmount === 0 ? null : spec.realizedPnl / riskAmount,
-        checklist: []
+        checklist: [],
+        // Tag kustom — tambahkan tag dummy berdasarkan setupTag untuk uji fitur 3
+        tags:
+            spec.setupTag
+                ? [
+                    { id: 1, name: spec.setupTag },
+                    { id: 2, name: 'BTC_Scalp' } // contoh tag dummy kedua
+                ]
+                : []
     }
 }
 

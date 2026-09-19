@@ -110,6 +110,19 @@ export function JournalEntry({ trades, onOpen }: JournalEntryProps): React.JSX.E
                                                         {detail.journal.emotionTag}
                                                     </span>
                                                 )}
+                                                {detail.tags.length > 0 && detail.tags.map((tag) => (
+                                                    <span
+                                                        key={tag.id}
+                                                        className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                                                    >
+                                                        #{tag.name}
+                                                    </span>
+                                                ))}
+                                                {detail.journal?.screenshotPath && (
+                                                    <span className="text-[10px] text-muted-foreground" title="Punya lampiran screenshot">
+                                                        gambar
+                                                    </span>
+                                                )}
                                                 {!hasThesis && <Badge tone="warning">tanpa tesis</Badge>}
                                                 {!hasReview && <Badge tone="warning">tanpa review</Badge>}
                                             </div>

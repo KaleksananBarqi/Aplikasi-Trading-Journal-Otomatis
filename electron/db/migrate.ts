@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_sync_support.sql?raw'
+import migration003 from './migrations/003_custom_tags.sql?raw'
 
 /**
  * Runner migrasi.
@@ -24,7 +25,8 @@ interface Migration {
 /** Daftar migrasi berurutan. Tambahkan entri baru di akhir, jangan edit yang lama. */
 const MIGRATIONS: Migration[] = [
     { version: 1, name: '001_init', sql: migration001 },
-    { version: 2, name: '002_sync_support', sql: migration002 }
+    { version: 2, name: '002_sync_support', sql: migration002 },
+    { version: 3, name: '003_custom_tags', sql: migration003 }
 ]
 
 export interface MigrationResult {

@@ -2,11 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
     IPC_CHANNELS,
     type AppHealth,
+    type BackupRunResult,
+    type BackupStatusPayload,
     type CredentialSavePayload,
     type CredentialStatusPayload,
+    type AiConfigPayload,
+    type AiConfigStatus,
+    type JournalAnalysisResult,
     type LogEntry,
     type MutationResult,
     type PreloadApi,
+    type ScreenshotUploadPayload,
     type SettingsPayload,
     type SyncProgressPayload,
     type SyncRunResult,
@@ -69,6 +75,38 @@ const api: PreloadApi = {
 
     setSettings: (payload: SettingsPayload): Promise<MutationResult<void>> =>
         ipcRenderer.invoke(IPC_CHANNELS.settingsSet, payload),
+
+    // --- Ekspor (fitur 4) ---
+    exportJournal: (format: 'csv' | 'json' | 'pdf', filter?: TradeFilterPayload) =>
+        ipcRenderer.invoke(IPC_CHANNELS.exportJournal, format, filter),
+
+    // --- Backup Google Drive (fitur 5) ---
+    getBackupStatus: (): Promise<BackupStatusPayload> =>
+        ipcRenderer.invoke(IPC_CHANNELS.backupStatus),
+    runBackup: (): Promise<MutationResult<BackupRunResult>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.backupRun),
+    disconnectBackup: (): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.backupDisconnect),
+
+    // --- Screenshot (fitur 1) ---
+    uploadScreenshot: (payload: ScreenshotUploadPayload): Promise<MutationResult<string>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.uploadScreenshot, payload),
+
+    getScreenshot: (relPath: string): Promise<MutationResult<string>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.getScreenshot, relPath),
+
+    // --- AI Insights (fitur 6) ---
+    getAiConfig: (): Promise<AiConfigStatus> =>
+        ipcRenderer.invoke(IPC_CHANNELS.aiConfigStatus),
+
+    saveAiConfig: (payload: AiConfigPayload): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.aiConfigSave, payload),
+
+    deleteAiConfig: (): Promise<MutationResult<void>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.aiConfigDelete),
+
+    analyzeJournal: (filter?: TradeFilterPayload): Promise<MutationResult<JournalAnalysisResult>> =>
+        ipcRenderer.invoke(IPC_CHANNELS.analyzeJournal, filter),
 
     // --- Kredensial ---
 

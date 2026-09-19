@@ -88,6 +88,45 @@ export interface ChecklistItem {
 }
 
 /**
+ * Satu tag kustom pada trade (fitur 3). Disimpan lewat tabel many-to-many
+ * `trade_journal_tags` — lihat plans/05-FEATURES-PLAN.md.
+ */
+export interface TradeTag {
+    id: number
+    /** Nama ternormalisasi tanpa tanda '#' berulang. */
+    name: string
+}
+
+/**
+ * Normalisasi nama tag: trim spasi luar dan hapus tanda '#' berulang.
+ * Contoh: "##BTC_Scalp " -> "BTC_Scalp".
+ */
+export function normalizeTagName(raw: string): string {
+    let value = raw.trim()
+    while (value.startsWith('#')) value = value.slice(1)
+    return value
+}
+
+/**
+ * Pisahkan input teks multi-tag (dipisah spasi/koma) menjadi daftar nama
+ * ternormalisasi yang unik (case-insensitive), tanpa string kosong.
+ */
+export function parseTags(input: string): string[] {
+    const parts = input.split(/[\s,]+/)
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const part of parts) {
+        const normalized = normalizeTagName(part)
+        if (normalized === '') continue
+        const key = normalized.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        result.push(normalized)
+    }
+    return result
+}
+
+/**
  * Stop-loss yang DIRENCANAKAN. Sumber perhitungan `rMultiple`.
  * Bila `plannedStop` null, `rMultiple` juga null — tidak diestimasi (brief §5.2).
  */
@@ -105,6 +144,8 @@ export interface TradeDetail {
     journal: TradeJournal | null
     plannedRisk: PlannedRisk | null
     checklist: ChecklistItem[]
+    /** Tag kustom banyak nilai (fitur 3). */
+    tags: TradeTag[]
     /** Dihitung; NULL bila stop loss tidak diisi. */
     rMultiple: number | null
 }
@@ -138,6 +179,8 @@ export interface JournalInput {
     emotionTag?: string | null
     executionGrade?: ExecutionGrade | null
     screenshotPath?: string | null
+    /** Tag kustom banyak nilai (fitur 3). Nama sudah ternormalisasi. */
+    tags?: string[]
     /** Bila diisi, checklist trade diganti seluruhnya. */
     checklist?: { label: string; checked: boolean }[]
 }
@@ -163,4 +206,39 @@ export function computeRMultiple(
     if (riskAmount === null || riskAmount === undefined) return null
     if (riskAmount === 0) return null
     return realizedPnl / riskAmount
+}
+
+/**
+ * Hitung RR rencana dari entry, SL, dan TP.
+ *
+ * Aturan (plans/05-FEATURES-PLAN.md fitur 2):
+ * - Long: rewardPerUnit = abs(plannedTarget - entryPrice)
+ * - Short: rewardPerUnit = abs(entryPrice - plannedTarget)
+ * - riskPerUnit = abs(entryPrice - plannedStop)
+ * - plannedRr = rewardPerUnit / riskPerUnit jika risk > 0
+ * - plannedRr = null jika SL kosong/sama dengan entry
+ *
+ * @param direction 'long' | 'short'
+ * @param entryPrice Harga entry
+ * @param plannedStop Stop loss direncanakan
+ * @param plannedTarget Target direncanakan
+ * @returns RR rencana atau null
+ */
+export function computePlannedRR(
+    direction: 'long' | 'short',
+    entryPrice: number,
+    plannedStop: number | null,
+    plannedTarget: number | null
+): number | null {
+    if (plannedStop === null || plannedStop === entryPrice) return null
+    if (plannedTarget === null) return null
+
+    const riskPerUnit = Math.abs(entryPrice - plannedStop)
+    if (riskPerUnit === 0) return null
+
+    const rewardPerUnit = direction === 'long'
+        ? Math.abs(plannedTarget - entryPrice)
+        : Math.abs(entryPrice - plannedTarget)
+
+    return rewardPerUnit / riskPerUnit
 }

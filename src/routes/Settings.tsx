@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '../components/AppShell'
+import { AiConfigPanel } from '../components/AiConfigPanel'
+import { BackupPanel } from '../components/BackupPanel'
 import { ExchangeCredentials } from '../components/ExchangeCredentials'
 import { SyncPanel } from '../components/SyncPanel'
 import { Badge, Button, Card, CardHeader, ErrorNote, Field, Select, TextArea } from '../components/ui'
@@ -199,6 +201,10 @@ export function Settings({
                             <SyncPanel onSyncComplete={onDataChanged} variant="full" />
                         </div>
                     </Card>
+
+                    <BackupPanel onSyncComplete={onDataChanged} />
+
+                    <AiConfigPanel onSaved={() => onDataChanged} />
 
                     <Card>
                         <CardHeader title="Status Sistem" description="Diagnostik koneksi database" />

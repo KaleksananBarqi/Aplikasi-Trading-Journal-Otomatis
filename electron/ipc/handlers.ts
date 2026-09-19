@@ -1,9 +1,15 @@
 import { ipcMain } from 'electron'
 import {
     IPC_CHANNELS,
+    type AiConfigPayload,
+    type AiConfigStatus,
     type AppHealth,
+    type BackupRunResult,
+    type BackupStatusPayload,
+    type JournalAnalysisResult,
     type LogEntry,
     type MutationResult,
+    type ScreenshotUploadPayload,
     type SettingsPayload,
     type TradeFilterPayload,
     type TradeMeta,
@@ -11,6 +17,7 @@ import {
 } from '../../shared/ipc-contract'
 import { getDb, getDbPath, runSmokeTest } from '../db/index'
 import { logger } from '../utils/logger'
+import { deleteScreenshot, readScreenshotDataUrl, saveScreenshot } from '../screenshots/index'
 import {
     countTrades,
     createTrade,
@@ -18,6 +25,7 @@ import {
     getTrade,
     listEmotionTags,
     listSetupTags,
+    listTagNames,
     listTrades,
     updateTrade
 } from '../db/repositories/trades'
@@ -83,8 +91,17 @@ export function registerIpcHandlers(): void {
         IPC_CHANNELS.tradeDelete,
         (_event, id: number): MutationResult<void> =>
             safe(() => {
-                const deleted = deleteTrade(getDb(), id)
+                const db = getDb()
+                const detail = getTrade(db, id)
+                if (!detail) throw new Error(`Trade dengan id ${id} tidak ditemukan`)
+
+                const deleted = deleteTrade(db, id)
                 if (!deleted) throw new Error(`Trade dengan id ${id} tidak ditemukan`)
+
+                // Bersihkan file screenshot terkait (fitur 1). Baca path SEBELUM
+                // trade dihapus karena relasi jurnal ikut ter-cascade.
+                const screenshotPath = detail.journal?.screenshotPath
+                if (screenshotPath) deleteScreenshot(screenshotPath)
             })
     )
 
@@ -104,10 +121,25 @@ export function registerIpcHandlers(): void {
                 symbols: symbols.map((s) => s.symbol),
                 setupTags: listSetupTags(db),
                 emotionTags: listEmotionTags(db),
+                tags: listTagNames(db),
                 checklistTemplate,
                 totalTrades: countTrades(db)
             }
         })
+    )
+
+    // --- Screenshot (fitur 1) ---
+
+    ipcMain.handle(
+        IPC_CHANNELS.uploadScreenshot,
+        (_event, payload: ScreenshotUploadPayload): MutationResult<string> =>
+            safe(() => saveScreenshot(payload))
+    )
+
+    ipcMain.handle(
+        IPC_CHANNELS.getScreenshot,
+        (_event, relPath: string): MutationResult<string> =>
+            safe(() => readScreenshotDataUrl(relPath))
     )
 
     // --- Settings -----------------------------------------------------------
@@ -135,7 +167,30 @@ export function registerIpcHandlers(): void {
                     setSetting(db, SETTING_KEYS.checklistTemplate, payload.checklistTemplate)
                 if (payload.hidePnl !== undefined)
                     setSetting(db, SETTING_KEYS.hidePnl, payload.hidePnl)
+                if (payload.aiModel !== undefined)
+                    setSetting(db, SETTING_KEYS.aiModel, payload.aiModel)
+                if (payload.aiBaseUrl !== undefined)
+                    setSetting(db, SETTING_KEYS.aiBaseUrl, payload.aiBaseUrl)
             })
+    )
+
+    // --- Ekspor (fitur 4) ----------------------------------------------------
+
+    ipcMain.handle(
+        IPC_CHANNELS.exportJournal,
+        async (_event, format: 'csv' | 'json' | 'pdf', filter?: TradeFilterPayload): Promise<MutationResult<string>> => {
+            try {
+                const db = getDb()
+                const trades = listTrades(db, filter ?? {})
+                const { exportJournal } = await import('../export/index')
+                const filePath = await exportJournal(format, trades)
+                return { ok: true, data: filePath }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                console.error('[ipc] export error:', message)
+                return { ok: false, error: message }
+            }
+        }
     )
 
     // --- Logs / Debugging ----------------------------------------------------
@@ -164,6 +219,83 @@ export function registerIpcHandlers(): void {
         IPC_CHANNELS.logWrite,
         (_event, { message, details }: { message: string; details?: unknown }): void => {
             logger.error(`[Renderer] ${message}`, details)
+        }
+    )
+
+    // --- Backup Google Drive (fitur 5) ---
+
+    ipcMain.handle(IPC_CHANNELS.backupStatus, async (): Promise<BackupStatusPayload> => {
+        const { getBackupStatus } = await import('../backup/index')
+        return getBackupStatus()
+    })
+
+    ipcMain.handle(IPC_CHANNELS.backupRun, async (): Promise<MutationResult<BackupRunResult>> => {
+        try {
+            const { runBackup } = await import('../backup/index')
+            const result = await runBackup()
+            return { ok: true, data: result }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            console.error('[ipc] backup error:', message)
+            return { ok: false, error: message }
+        }
+    })
+
+    ipcMain.handle(IPC_CHANNELS.backupDisconnect, async (): Promise<MutationResult<void>> => {
+        try {
+            const { disconnectBackup } = await import('../backup/index')
+            disconnectBackup()
+            return { ok: true }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { ok: false, error: message }
+        }
+    })
+
+    // --- AI Insights (fitur 6) ---
+
+    ipcMain.handle(IPC_CHANNELS.aiConfigStatus, async (_event): Promise<AiConfigStatus> => {
+        const { getAiConfig } = await import('../ai/index')
+        return getAiConfig()
+    })
+
+    ipcMain.handle(
+        IPC_CHANNELS.aiConfigSave,
+        async (_event, payload: AiConfigPayload): Promise<MutationResult<void>> => {
+            try {
+                const { saveAiConfig } = await import('../ai/index')
+                saveAiConfig(payload)
+                return { ok: true }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                return { ok: false, error: message }
+            }
+        }
+    )
+
+    ipcMain.handle(IPC_CHANNELS.aiConfigDelete, async (): Promise<MutationResult<void>> => {
+        try {
+            const { deleteAiConfig } = await import('../ai/index')
+            deleteAiConfig()
+            return { ok: true }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { ok: false, error: message }
+        }
+    })
+
+    ipcMain.handle(
+        IPC_CHANNELS.analyzeJournal,
+        async (_event, filter?: TradeFilterPayload): Promise<MutationResult<JournalAnalysisResult>> => {
+            try {
+                const { analyzeJournal } = await import('../ai/index')
+                const result = await analyzeJournal(filter)
+                return { ok: true, data: result }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                console.error('[ipc] AI analyze error:', message)
+                return { ok: false, error: message }
+            }
         }
     )
 }

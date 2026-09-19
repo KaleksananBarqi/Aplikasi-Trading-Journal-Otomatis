@@ -96,6 +96,13 @@ export default function App(): React.JSX.Element {
         closeEditor()
     }, [closeEditor])
 
+    const handleExport = useCallback(async (format: 'csv' | 'json' | 'pdf'): Promise<void> => {
+        const result = await window.api.exportJournal(format, {})
+        if (!result.ok) {
+            window.alert(result.error ?? 'Gagal mengekspor journal.')
+        }
+    }, [])
+
     /** Status ringkas + sync di kaki sidebar. */
     const statusSlot = useMemo(
         () => (
@@ -170,6 +177,7 @@ export default function App(): React.JSX.Element {
                     onDelete={(detail) => void handleDelete(detail)}
                     onCreate={() => setCreating(true)}
                     hidePnl={hidePnl}
+                    onExport={(format) => void handleExport(format)}
                 />
             ) : route === 'journal' ? (
                 <JournalEntry trades={trades} onOpen={setEditing} />

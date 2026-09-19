@@ -36,11 +36,47 @@ export const IPC_CHANNELS = {
     logsGet: 'logs:get',
     logsClear: 'logs:clear',
     logsOpenFolder: 'logs:openFolder',
-    logWrite: 'log:write'
+    logWrite: 'log:write',
+
+    // --- Ekspor (fitur 4) ---
+    exportJournal: 'journal:export',
+
+    // --- Backup Google Drive (fitur 5) ---
+    backupStatus: 'backup:status',
+    backupRun: 'backup:run',
+    backupDisconnect: 'backup:disconnect',
+
+    // --- AI (fitur 6) ---
+    analyzeJournal: 'journal:analyze',
+    aiConfigStatus: 'ai:configStatus',
+    aiConfigSave: 'ai:configSave',
+    aiConfigDelete: 'ai:configDelete',
+
+    // --- Screenshot (fitur 1) ---
+    uploadScreenshot: 'screenshot:upload',
+    getScreenshot: 'screenshot:get'
 } as const
 
 /** Exchange yang bisa disinkronkan. */
 export type SyncableExchange = 'mexc' | 'bitunix'
+
+// --- Backup Google Drive (fitur 5) ---
+
+export interface BackupStatusPayload {
+    connected: boolean
+    email: string | null
+    folder: string | null
+    lastBackupAt: number | null
+    nextBackupAt: number | null
+}
+
+export interface BackupRunResult {
+    status: 'ok' | 'partial' | 'error'
+    filesUploaded: number
+    bytesUploaded: number
+    durationMs: number
+    error?: string
+}
 
 /** Status kredensial satu exchange. TIDAK memuat kredensialnya sendiri. */
 export interface CredentialStatusPayload {
@@ -153,6 +189,8 @@ export interface JournalFormPayload {
     emotionTag?: string | null
     executionGrade?: ExecutionGrade | null
     screenshotPath?: string | null
+    /** Tag kustom banyak nilai (fitur 3). */
+    tags?: string[]
     checklist?: { label: string; checked: boolean }[]
 }
 
@@ -174,6 +212,8 @@ export interface TradeMeta {
     symbols: string[]
     setupTags: string[]
     emotionTags: string[]
+    /** Tag kustom banyak nilai (fitur 3). */
+    tags: string[]
     checklistTemplate: string[]
     totalTrades: number
 }
@@ -187,6 +227,45 @@ export interface SettingsPayload {
     autoSyncIntervalMin?: number
     checklistTemplate?: string[]
     hidePnl?: boolean
+    /** Nama model OpenAI untuk AI Insights (fitur 6). */
+    aiModel?: string
+    /** Base URL provider OpenAI-compatible (fitur 6). */
+    aiBaseUrl?: string
+}
+
+/** Payload upload screenshot (fitur 1). */
+export interface ScreenshotUploadPayload {
+    /** Nama file asli (hanya untuk validasi ekstensi). */
+    fileName: string
+    /** Bytes gambar (ArrayBuffer dari renderer). */
+    data: Uint8Array
+}
+
+// --- AI Insights (fitur 6) ---
+
+/** Hasil analisa journal oleh AI (fitur 6). */
+export interface JournalAnalysisResult {
+    /** Ringkasan satu paragraf. */
+    summary: string
+    /** Pola kelemahan yang teridentifikasi. */
+    weaknesses: string[]
+    /** Saran perbaikan konkret. */
+    suggestions: string[]
+    /** Metrik utama yang disebut AI (opsional). */
+    metrics?: { label: string; value: string }[]
+}
+
+export interface AiConfigPayload {
+    apiKey: string
+    model: string
+    baseUrl?: string
+}
+
+export interface AiConfigStatus {
+    configured: boolean
+    model: string | null
+    baseUrl: string | null
+    keyHint: string | null
 }
 
 /** Bentuk `window.api` yang diekspos preload ke renderer. */
@@ -200,6 +279,24 @@ export interface PreloadApi {
     getTradeMeta(): Promise<TradeMeta>
     getSettings(): Promise<Record<string, unknown>>
     setSettings(payload: SettingsPayload): Promise<MutationResult<void>>
+
+    // --- Ekspor (fitur 4) ---
+    exportJournal(format: 'csv' | 'json' | 'pdf', filter?: TradeFilterPayload): Promise<MutationResult<string>>
+
+    // --- Backup Google Drive (fitur 5) ---
+    getBackupStatus(): Promise<BackupStatusPayload>
+    runBackup(): Promise<MutationResult<BackupRunResult>>
+    disconnectBackup(): Promise<MutationResult<void>>
+
+    // --- Screenshot (fitur 1) ---
+    uploadScreenshot(payload: ScreenshotUploadPayload): Promise<MutationResult<string>>
+    getScreenshot(relPath: string): Promise<MutationResult<string>>
+
+    // --- AI Insights (fitur 6) ---
+    getAiConfig(): Promise<AiConfigStatus>
+    saveAiConfig(payload: AiConfigPayload): Promise<MutationResult<void>>
+    deleteAiConfig(): Promise<MutationResult<void>>
+    analyzeJournal(filter?: TradeFilterPayload): Promise<MutationResult<JournalAnalysisResult>>
 
     // --- Kredensial (Fase 2) ---
     getCredentialStatuses(): Promise<CredentialStatusPayload[]>

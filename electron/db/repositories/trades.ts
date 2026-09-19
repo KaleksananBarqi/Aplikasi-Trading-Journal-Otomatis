@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3'
 import {
     DEFAULT_CHECKLIST_TEMPLATE,
+    normalizeTagName,
     type ChecklistItem,
     type ExecutionGrade,
     type ExchangeId,
@@ -13,7 +14,8 @@ import {
     type TradeDetail,
     type TradeDirection,
     type TradeInput,
-    type TradeJournal
+    type TradeJournal,
+    type TradeTag
 } from '../../../shared/domain'
 
 /**
@@ -165,14 +167,16 @@ interface RelatedData {
     journals: Map<number, TradeJournal>
     risks: Map<number, PlannedRisk>
     checklists: Map<number, ChecklistItem[]>
+    tags: Map<number, TradeTag[]>
 }
 
 function loadRelated(db: Database.Database, tradeIds: number[]): RelatedData {
     const journals = new Map<number, TradeJournal>()
     const risks = new Map<number, PlannedRisk>()
     const checklists = new Map<number, ChecklistItem[]>()
+    const tags = new Map<number, TradeTag[]>()
 
-    if (tradeIds.length === 0) return { journals, risks, checklists }
+    if (tradeIds.length === 0) return { journals, risks, checklists, tags }
 
     const list = placeholders(tradeIds.length)
 
@@ -201,7 +205,28 @@ function loadRelated(db: Database.Database, tradeIds: number[]): RelatedData {
         }
     }
 
-    return { journals, risks, checklists }
+    // Tag kustom many-to-many (fitur 3). Gabungkan journal_tags + relasi per trade,
+    // diposisikan per trade (group by trade_id) untuk menghindari N+1.
+    const tagRows = db
+        .prepare(
+            `SELECT jt.trade_id, jt2.id as tag_id, jt2.name
+       FROM trade_journal_tags jt
+       JOIN journal_tags jt2 ON jt2.id = jt.tag_id
+       WHERE jt.trade_id IN (${list})
+       ORDER BY jt.trade_id, jt2.name COLLATE NOCASE`
+        )
+        .all(...tradeIds) as { trade_id: number; tag_id: number; name: string }[]
+    for (const row of tagRows) {
+        const existing = tags.get(row.trade_id)
+        const tag: TradeTag = { id: row.tag_id, name: row.name }
+        if (existing) {
+            existing.push(tag)
+        } else {
+            tags.set(row.trade_id, [tag])
+        }
+    }
+
+    return { journals, risks, checklists, tags }
 }
 
 function assembleDetail(trade: Trade, related: RelatedData): TradeDetail {
@@ -212,6 +237,7 @@ function assembleDetail(trade: Trade, related: RelatedData): TradeDetail {
         journal,
         plannedRisk,
         checklist: related.checklists.get(trade.id) ?? [],
+        tags: related.tags.get(trade.id) ?? [],
         rMultiple: computeR(trade.realizedPnl, plannedRisk?.riskAmount ?? null)
     }
 }
@@ -327,6 +353,17 @@ export function countTrades(db: Database.Database): number {
     return row.n
 }
 
+/** Daftar semua nama tag kustom yang pernah dipakai — untuk autocomplete di UI. */
+export function listTagNames(db: Database.Database): string[] {
+    const rows = db
+        .prepare(
+            `SELECT DISTINCT name FROM journal_tags
+       ORDER BY name COLLATE NOCASE`
+        )
+        .all() as { name: string }[]
+    return rows.map((r) => r.name)
+}
+
 // ---------------------------------------------------------------------------
 // Operasi tulis
 // ---------------------------------------------------------------------------
@@ -373,6 +410,47 @@ function writeJournal(
         journal.checklist.forEach((item, index) => {
             insert.run(tradeId, item.label, item.checked ? 1 : 0, index)
         })
+    }
+
+    // Tag kustom banyak nilai (fitur 3). Ganti seluruh relasi trade <-> tag;
+    // katalog tag dibiarkan utuh (tidak dihapus) agar riwayat tetap stabil.
+    if (journal.tags !== undefined) {
+        writeTradeTags(db, tradeId, journal.tags)
+    }
+}
+
+/**
+ * Tulis ulang relasi many-to-many trade <-> tag.
+ *
+ * Katalog `journal_tags` dipertahankan (tidak dihapus) supaya riwayat ekspor dan
+ * autocomplete tetap stabil. Nama tag dinormalisasi (trim, tanpa '#' berulang)
+ * dan relasi menggunakan `name` sebagai kunci unik case-insensitive.
+ */
+function writeTradeTags(db: Database.Database, tradeId: number, names: string[]): void {
+    const normalized = new Set<string>()
+    for (const raw of names) {
+        const n = normalizeTagName(raw)
+        if (n === '') continue
+        normalized.add(n)
+    }
+
+    db.prepare('DELETE FROM trade_journal_tags WHERE trade_id = ?').run(tradeId)
+
+    if (normalized.size === 0) return
+
+    const findTag = db.prepare('SELECT id FROM journal_tags WHERE name = ? COLLATE NOCASE')
+    const insertTag = db.prepare('INSERT INTO journal_tags (name, created_at) VALUES (?, ?)')
+    const link = db.prepare(
+        'INSERT OR IGNORE INTO trade_journal_tags (trade_id, tag_id) VALUES (?, ?)'
+    )
+
+    for (const name of normalized) {
+        let row = findTag.get(name) as { id: number } | undefined
+        if (!row) {
+            const info = insertTag.run(name, Date.now())
+            row = { id: Number(info.lastInsertRowid) }
+        }
+        link.run(tradeId, row.id)
     }
 }
 
